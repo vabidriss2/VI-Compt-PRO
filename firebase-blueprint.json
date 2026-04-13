@@ -1,0 +1,143 @@
+{
+  "entities": {
+    "Company": {
+      "title": "Company",
+      "description": "Represents a business entity in the system.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "The name of the company." },
+        "taxId": { "type": "string", "description": "Tax identification number." },
+        "currency": { "type": "string", "description": "Base currency (e.g., EUR, USD, XAF)." },
+        "address": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "currency"]
+    },
+    "User": {
+      "title": "User",
+      "description": "System user with role-based access.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["super_admin", "accountant", "manager", "cashier", "auditor"] },
+        "companyId": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "role", "companyId"]
+    },
+    "Account": {
+      "title": "Account",
+      "description": "An account in the Chart of Accounts.",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "description": "Account code (e.g., 1010)." },
+        "name": { "type": "string", "description": "Account name (e.g., Cash)." },
+        "type": { "type": "string", "enum": ["asset", "liability", "equity", "revenue", "expense"] },
+        "parentAccountId": { "type": "string", "description": "ID of the parent account for hierarchy." },
+        "companyId": { "type": "string" },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["code", "name", "type", "companyId"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "A financial transaction grouping multiple journal entries.",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "format": "date" },
+        "description": { "type": "string" },
+        "reference": { "type": "string" },
+        "companyId": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["date", "description", "companyId"]
+    },
+    "JournalEntry": {
+      "title": "JournalEntry",
+      "description": "A single line item in a transaction (debit or credit).",
+      "type": "object",
+      "properties": {
+        "transactionId": { "type": "string" },
+        "accountId": { "type": "string" },
+        "debit": { "type": "number" },
+        "credit": { "type": "number" },
+        "companyId": { "type": "string" }
+      },
+      "required": ["transactionId", "accountId", "companyId"]
+    },
+    "Contact": {
+      "title": "Contact",
+      "description": "A customer or supplier.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["customer", "supplier"] },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "companyId": { "type": "string" }
+      },
+      "required": ["name", "type", "companyId"]
+    },
+    "Invoice": {
+      "title": "Invoice",
+      "description": "A sales invoice or purchase bill.",
+      "type": "object",
+      "properties": {
+        "contactId": { "type": "string" },
+        "type": { "type": "string", "enum": ["sale", "purchase"] },
+        "number": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "dueDate": { "type": "string", "format": "date" },
+        "items": { "type": "array" },
+        "subtotal": { "type": "number" },
+        "taxAmount": { "type": "number" },
+        "totalAmount": { "type": "number" },
+        "status": { "type": "string", "enum": ["draft", "pending", "paid", "overdue", "partial"] },
+        "companyId": { "type": "string" }
+      },
+      "required": ["contactId", "type", "number", "date", "totalAmount", "companyId"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Tracks user actions for security and auditing.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "action": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "details": { "type": "string" },
+        "companyId": { "type": "string" }
+      },
+      "required": ["userId", "action", "timestamp", "companyId"]
+    },
+    "Tax": {
+      "title": "Tax",
+      "description": "Tax rates configuration.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "rate": { "type": "number" },
+        "companyId": { "type": "string" },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["name", "rate", "companyId"]
+    }
+  },
+  "firestore": {
+    "/companies/{companyId}": { "schema": "Company", "description": "Company details." },
+    "/users/{userId}": { "schema": "User", "description": "User profiles and roles." },
+    "/companies/{companyId}/accounts/{accountId}": { "schema": "Account", "description": "Chart of accounts for a company." },
+    "/companies/{companyId}/transactions/{transactionId}": { "schema": "Transaction", "description": "Financial transactions." },
+    "/companies/{companyId}/journal_entries/{entryId}": { "schema": "JournalEntry", "description": "Individual journal entries." },
+    "/companies/{companyId}/contacts/{contactId}": { "schema": "Contact", "description": "Customers and suppliers." },
+    "/companies/{companyId}/invoices/{invoiceId}": { "schema": "Invoice", "description": "Invoices and bills." },
+    "/companies/{companyId}/taxes/{taxId}": { "schema": "Tax", "description": "Tax configurations." },
+    "/companies/{companyId}/audit_logs/{logId}": { "schema": "AuditLog", "description": "Audit trail." }
+  }
+}

@@ -1,0 +1,173 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        getUserData().role == 'super_admin' ||
+        (request.auth.token.email == "vabidriss@gmail.com" && request.auth.token.email_verified == true)
+      );
+    }
+
+    function isAccountant() {
+      return isAuthenticated() && getUserData().role in ['super_admin', 'accountant'];
+    }
+
+    function isManager() {
+      return isAuthenticated() && getUserData().role in ['super_admin', 'accountant', 'manager'];
+    }
+
+    function isCashier() {
+      return isAuthenticated() && getUserData().role in ['super_admin', 'accountant', 'manager', 'cashier'];
+    }
+
+    function isAuditor() {
+      return isAuthenticated() && getUserData().role in ['super_admin', 'accountant', 'manager', 'cashier', 'auditor'];
+    }
+
+    function belongsToCompany(companyId) {
+      return isAuthenticated() && getUserData().companyId == companyId;
+    }
+
+    // Validation helpers
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function isValidString(val, min, max) {
+      return val is string && val.size() >= min && val.size() <= max;
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasRequiredFields(['email', 'role', 'companyId']) &&
+             data.email is string && data.email.size() < 100 &&
+             data.role in ['super_admin', 'accountant', 'manager', 'cashier', 'auditor'] &&
+             data.companyId is string;
+    }
+
+    function isValidAccount(data) {
+      return hasRequiredFields(['code', 'name', 'type', 'companyId']) &&
+             isValidString(data.code, 1, 20) &&
+             isValidString(data.name, 1, 100) &&
+             data.type in ['asset', 'liability', 'equity', 'revenue', 'expense'] &&
+             data.companyId is string;
+    }
+
+    function isValidTransaction(data) {
+      return hasRequiredFields(['date', 'description', 'companyId']) &&
+             isValidString(data.date, 10, 10) &&
+             isValidString(data.description, 1, 500) &&
+             data.companyId is string;
+    }
+
+    function isValidJournalEntry(data) {
+      return hasRequiredFields(['transactionId', 'accountId', 'companyId']) &&
+             data.transactionId is string &&
+             data.accountId is string &&
+             data.debit is number && data.debit >= 0 &&
+             data.credit is number && data.credit >= 0 &&
+             data.companyId is string;
+    }
+
+    function isValidContact(data) {
+      return hasRequiredFields(['name', 'type', 'companyId']) &&
+             isValidString(data.name, 1, 100) &&
+             data.type in ['customer', 'supplier'] &&
+             data.companyId is string;
+    }
+
+    function isValidInvoice(data) {
+      return hasRequiredFields(['contactId', 'type', 'number', 'date', 'totalAmount', 'companyId']) &&
+             data.contactId is string &&
+             data.type in ['sale', 'purchase'] &&
+             isValidString(data.number, 1, 50) &&
+             data.totalAmount is number &&
+             data.companyId is string;
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow create: if isAuthenticated() && request.auth.uid == userId && isValidUser(request.resource.data) && (
+        // Allow first user of a company to be super_admin
+        request.resource.data.role == 'super_admin' || isAdmin()
+      );
+      allow update: if isAuthenticated() && (request.auth.uid == userId || isAdmin()) && isValidUser(request.resource.data) && (
+        // Prevent self-role escalation unless admin
+        (request.resource.data.role == resource.data.role) || isAdmin()
+      );
+    }
+
+    // Companies collection
+    match /companies/{companyId} {
+      allow read: if isAuthenticated() && (belongsToCompany(companyId) || isAdmin());
+      allow create: if isAuthenticated() && (request.resource.data.ownerId == request.auth.uid || isAdmin());
+      allow update: if isAuthenticated() && (belongsToCompany(companyId) && isManager() || isAdmin());
+
+      // Sub-collections under company
+      match /accounts/{accountId} {
+        allow read: if isAuditor() && belongsToCompany(companyId);
+        allow create: if isAccountant() && belongsToCompany(companyId) && isValidAccount(request.resource.data);
+        allow update: if isAccountant() && belongsToCompany(companyId) && isValidAccount(request.resource.data);
+        allow delete: if isAccountant() && belongsToCompany(companyId);
+      }
+
+      match /transactions/{transactionId} {
+        allow read: if isAuditor() && belongsToCompany(companyId);
+        allow create: if isAccountant() && belongsToCompany(companyId) && isValidTransaction(request.resource.data);
+        allow update: if isAccountant() && belongsToCompany(companyId) && isValidTransaction(request.resource.data);
+      }
+
+      match /journal_entries/{entryId} {
+        allow read: if isAuditor() && belongsToCompany(companyId);
+        allow create: if isAccountant() && belongsToCompany(companyId) && isValidJournalEntry(request.resource.data);
+        allow update: if isAccountant() && belongsToCompany(companyId) && isValidJournalEntry(request.resource.data);
+      }
+
+      match /contacts/{contactId} {
+        allow read: if isAuditor() && belongsToCompany(companyId);
+        allow create: if isCashier() && belongsToCompany(companyId) && isValidContact(request.resource.data);
+        allow update: if isCashier() && belongsToCompany(companyId) && isValidContact(request.resource.data);
+      }
+
+      match /invoices/{invoiceId} {
+        allow read: if isAuditor() && belongsToCompany(companyId);
+        allow create: if isCashier() && belongsToCompany(companyId) && isValidInvoice(request.resource.data);
+        allow update: if isCashier() && belongsToCompany(companyId) && isValidInvoice(request.resource.data);
+      }
+
+      match /taxes/{taxId} {
+        allow read: if isAuditor() && belongsToCompany(companyId);
+        allow create: if isManager() && belongsToCompany(companyId);
+        allow update: if isManager() && belongsToCompany(companyId);
+      }
+
+      match /audit_logs/{logId} {
+        allow read: if isManager() && belongsToCompany(companyId);
+        allow create: if isAuthenticated() && belongsToCompany(companyId);
+      }
+    }
+  }
+}
