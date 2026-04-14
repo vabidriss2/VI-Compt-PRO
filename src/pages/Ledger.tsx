@@ -55,6 +55,9 @@ export default function Ledger() {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
 
   // New Transaction State
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -184,6 +187,17 @@ export default function Ledger() {
     ]);
   };
 
+  const filteredTransactions = transactions.filter(tx => {
+    const searchStr = `${tx.description} ${tx.reference} ${tx.journalCode}`.toLowerCase();
+    const matchesSearch = searchStr.includes(searchTerm.toLowerCase());
+    
+    const txDate = tx.date;
+    const matchesStartDate = !startDate || txDate >= startDate;
+    const matchesEndDate = !endDate || txDate <= endDate;
+    
+    return matchesSearch && matchesStartDate && matchesEndDate;
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -240,7 +254,7 @@ export default function Ledger() {
                 </div>
                 
                 {entries.map((entry, index) => (
-                  <div key={index} className="grid grid-cols-12 gap-2 items-center">
+                  <div key={index} className="grid grid-cols-12 gap-2 items-center p-2 rounded-lg transition-all hover:bg-muted/30 hover:shadow-sm group">
                     <div className="col-span-6">
                       <Select 
                         value={entry.accountId} 
@@ -319,20 +333,52 @@ export default function Ledger() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Journal des opérations</CardTitle>
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground whitespace-nowrap">Période du:</span>
+                <Input 
+                  type="date" 
+                  className="h-9 w-40" 
+                  value={startDate}
+                  onChange={e => setStartDate(e.target.value)}
+                />
+                <span className="text-xs text-muted-foreground">au:</span>
+                <Input 
+                  type="date" 
+                  className="h-9 w-40" 
+                  value={endDate}
+                  onChange={e => setEndDate(e.target.value)}
+                />
+                {(startDate || endDate) && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => { setStartDate(''); setEndDate(''); }}
+                    className="h-9 px-2 text-xs"
+                  >
+                    Effacer
+                  </Button>
+                )}
+              </div>
+              <div className="relative w-64">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  placeholder="Rechercher..." 
+                  className="pl-10 h-9" 
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                />
+              </div>
               <Button variant="outline" size="sm" className="gap-2">
                 <Filter size={14} /> Filtrer
-              </Button>
-              <Button variant="outline" size="sm" className="gap-2">
-                <Search size={14} /> Rechercher
               </Button>
             </div>
           </div>
         </CardHeader>
         <CardContent>
           <div className="space-y-8">
-            {transactions.length > 0 ? (
-              transactions.map((tx) => (
+            {filteredTransactions.length > 0 ? (
+              filteredTransactions.map((tx) => (
                 <div key={tx.id} className="border rounded-lg overflow-hidden">
                   <div className="bg-muted/50 p-3 flex items-center justify-between border-b">
                     <div className="flex items-center gap-4">

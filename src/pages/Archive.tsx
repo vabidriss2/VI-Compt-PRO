@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { logAction } from '../lib/audit';
+import { handleFirestoreError, OperationType } from '../lib/error-handler';
 
 import { downloadPDF } from '../lib/download-utils';
 
@@ -41,6 +42,8 @@ export default function ArchivePage() {
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setArchives(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `companies/${userData.companyId}/archives`);
     });
 
     return () => unsubscribe();

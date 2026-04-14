@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { logAction } from '../lib/audit';
 import { cn } from '@/lib/utils';
+import { handleFirestoreError, OperationType } from '../lib/error-handler';
 
 export default function BankRecon() {
   const { userData, company } = useAuth();
@@ -32,6 +33,8 @@ export default function BankRecon() {
       const all = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       // In a real app, we'd filter by account code 512*
       setBankEntries(all);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `companies/${userData.companyId}/journal_entries`);
     });
 
     // Fetch bank statement lines
@@ -42,6 +45,8 @@ export default function BankRecon() {
 
     const unsubscribeStatements = onSnapshot(qStatements, (snapshot) => {
       setStatementLines(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `companies/${userData.companyId}/bank_statements`);
     });
 
     return () => {

@@ -69,7 +69,7 @@ export default function CashFlow() {
           <CardTitle>Évolution de la trésorerie</CardTitle>
           <CardDescription>Historique et prévisionnel sur 6 mois.</CardDescription>
         </CardHeader>
-        <CardContent className="h-[350px] pt-4 w-full min-h-[350px]">
+        <CardContent className="h-[350px] pt-4 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={data}>
               <defs>

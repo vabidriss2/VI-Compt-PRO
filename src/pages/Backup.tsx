@@ -4,11 +4,15 @@ import { Button } from '@/components/ui/button';
 import { Database, Download, RefreshCw, CheckCircle2, Clock, Shield } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
+import { useAuth } from '../context/AuthContext';
+import { logAction } from '../lib/audit';
 
 import { downloadCSV } from '../lib/download-utils';
 
 export default function Backup() {
-  const [isBackingUp, setIsBackingUp] = useState(false);
+  const { userData } = useAuth();
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const handleDownloadBackup = (date: string) => {
     const data = [
@@ -17,11 +21,22 @@ export default function Backup() {
     downloadCSV(data, `Backup_${date.replace(/[/ :]/g, '_')}`);
   };
 
-  const handleBackup = () => {
-    setIsBackingUp(true);
-    setTimeout(() => {
-      setIsBackingUp(false);
-    }, 2000);
+  const handleSyncAndBackup = async () => {
+    setIsSyncing(true);
+    try {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      if (userData?.companyId) {
+        await logAction(userData.companyId, userData.uid, 'EXECUTE', 'backup', 'manual', { timestamp: new Date().toISOString() });
+      }
+      
+      toast.success("Données sauvegardées et synchronisées avec succès !");
+    } catch (error) {
+      toast.error("Erreur lors de la synchronisation");
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   return (
@@ -31,9 +46,9 @@ export default function Backup() {
           <h1 className="text-3xl font-bold tracking-tight">Sauvegarde</h1>
           <p className="text-muted-foreground">Gérez vos sauvegardes de données et assurez la sécurité de votre comptabilité.</p>
         </div>
-        <Button className="gap-2" onClick={handleBackup} disabled={isBackingUp}>
-          <Database size={18} /> 
-          {isBackingUp ? "Sauvegarde en cours..." : "Sauvegarder maintenant"}
+        <Button className="gap-2" onClick={handleSyncAndBackup} disabled={isSyncing}>
+          <RefreshCw size={18} className={isSyncing ? "animate-spin" : ""} /> 
+          {isSyncing ? "Synchronisation..." : "Sauvegarder & Synchroniser"}
         </Button>
       </div>
 

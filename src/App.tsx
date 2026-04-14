@@ -19,6 +19,7 @@ import Balance from './pages/Balance';
 import Entries from './pages/Entries';
 import JournalReports from './pages/JournalReports';
 import UserManagement from './pages/UserManagement';
+import Products from './pages/Products';
 import EntryTemplates from './pages/EntryTemplates';
 import Schedules from './pages/Schedules';
 import Reminders from './pages/Reminders';
@@ -37,6 +38,7 @@ import Archive from './pages/Archive';
 import Backup from './pages/Backup';
 import PlaceholderPage from './components/PlaceholderPage';
 import { Toaster } from '@/components/ui/sonner';
+import { NetworkStatus } from './components/NetworkStatus';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -62,6 +64,7 @@ export default function App() {
                     <Route path="/accounts" element={<Accounts />} />
                     <Route path="/ledger" element={<Ledger />} />
                     <Route path="/invoices" element={<Invoices />} />
+                    <Route path="/products" element={<Products />} />
                     <Route path="/contacts" element={<Contacts />} />
                     <Route path="/reports" element={<Reports />} />
                     <Route path="/taxes" element={<Taxes />} />
@@ -101,6 +104,7 @@ export default function App() {
         </Routes>
       </Router>
       <Toaster />
+      <NetworkStatus />
     </AuthProvider>
   );
 }

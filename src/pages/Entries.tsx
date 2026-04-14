@@ -27,9 +27,10 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { Plus, Trash2, Save, RefreshCw, Calculator } from 'lucide-react';
+import { Plus, Trash2, Save, RefreshCw, Calculator, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { Badge } from '@/components/ui/badge';
 import { handleFirestoreError, OperationType } from '../lib/error-handler';
 import { logAction } from '../lib/audit';
 
@@ -47,6 +48,10 @@ export default function Entries() {
   const [journals, setJournals] = useState<any[]>([]);
   const [analyticalPlans, setAnalyticalPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
 
   const generateReference = () => `PC-${new Date().getFullYear()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
 
@@ -66,27 +71,38 @@ export default function Entries() {
     const unsubscribeAccs = onSnapshot(
       query(collection(db, `companies/${userData.companyId}/accounts`)),
       (snapshot) => setAccounts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
-      (error) => handleFirestoreError(error, OperationType.LIST, 'accounts')
+      (error) => handleFirestoreError(error, OperationType.LIST, `companies/${userData.companyId}/accounts`)
     );
 
     // Fetch Journals
     const unsubscribeJournals = onSnapshot(
       query(collection(db, `companies/${userData.companyId}/journals`)),
       (snapshot) => setJournals(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
-      (error) => handleFirestoreError(error, OperationType.LIST, 'journals')
+      (error) => handleFirestoreError(error, OperationType.LIST, `companies/${userData.companyId}/journals`)
     );
 
     // Fetch Analytical Plans
     const unsubscribeAnalytical = onSnapshot(
       query(collection(db, `companies/${userData.companyId}/analytical_plans`)),
       (snapshot) => setAnalyticalPlans(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
-      (error) => handleFirestoreError(error, OperationType.LIST, 'analytical_plans')
+      (error) => handleFirestoreError(error, OperationType.LIST, `companies/${userData.companyId}/analytical_plans`)
+    );
+
+    // Fetch Recent Transactions
+    const unsubscribeRecent = onSnapshot(
+      query(
+        collection(db, `companies/${userData.companyId}/transactions`),
+        orderBy('date', 'desc')
+      ),
+      (snapshot) => setRecentTransactions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
+      (error) => handleFirestoreError(error, OperationType.LIST, `companies/${userData.companyId}/transactions`)
     );
 
     return () => {
       unsubscribeAccs();
       unsubscribeJournals();
       unsubscribeAnalytical();
+      unsubscribeRecent();
     };
   }, [userData]);
 
@@ -100,6 +116,11 @@ export default function Entries() {
   };
 
   const updateLine = (index: number, field: keyof EntryLine, value: any) => {
+    if ((field === 'debit' || field === 'credit') && value < 0) {
+      toast.error("Le montant doit être positif.");
+      return;
+    }
+
     const newLines = [...lines];
     newLines[index] = { ...newLines[index], [field]: value };
     
@@ -113,6 +134,17 @@ export default function Entries() {
   const totalDebit = lines.reduce((sum, l) => sum + Number(l.debit || 0), 0);
   const totalCredit = lines.reduce((sum, l) => sum + Number(l.credit || 0), 0);
   const isBalanced = Math.abs(totalDebit - totalCredit) < 0.01 && totalDebit > 0;
+
+  const filteredTransactions = recentTransactions.filter(tx => {
+    const searchStr = `${tx.description} ${tx.reference} ${tx.journalId}`.toLowerCase();
+    const matchesSearch = searchStr.includes(searchTerm.toLowerCase());
+    
+    const txDate = tx.date;
+    const matchesStartDate = !startDate || txDate >= startDate;
+    const matchesEndDate = !endDate || txDate <= endDate;
+    
+    return matchesSearch && matchesStartDate && matchesEndDate;
+  });
 
   const handleSave = async () => {
     if (!journalId) {
@@ -191,8 +223,8 @@ export default function Entries() {
             Réinitialiser
           </Button>
           <Button onClick={handleSave} disabled={!isBalanced || loading} className="gap-2">
-            <Save size={18} />
-            {loading ? "Enregistrement..." : "Valider l'écriture"}
+            <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
+            {loading ? "Synchronisation..." : "Sauvegarder & Synchroniser"}
           </Button>
         </div>
       </div>
@@ -229,6 +261,31 @@ export default function Entries() {
         </CardContent>
       </Card>
 
+      {/* Transaction Summary Header */}
+      <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-6">
+          <div className="flex flex-col">
+            <span className="text-[10px] text-muted-foreground uppercase font-bold">Date</span>
+            <span className="text-sm font-semibold">{date ? format(new Date(date), 'dd/MM/yyyy') : '-'}</span>
+          </div>
+          <div className="flex flex-col border-l pl-6">
+            <span className="text-[10px] text-muted-foreground uppercase font-bold">Journal</span>
+            <span className="text-sm font-semibold">
+              {journals.find(j => j.id === journalId)?.code || '-'}
+            </span>
+          </div>
+          <div className="flex flex-col border-l pl-6">
+            <span className="text-[10px] text-muted-foreground uppercase font-bold">Référence</span>
+            <span className="text-sm font-semibold font-mono">{reference || '-'}</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-4">
+          <Badge variant={isBalanced ? "default" : "destructive"} className="px-3 py-1">
+            {isBalanced ? "Équilibrée" : "Non équilibrée"}
+          </Badge>
+        </div>
+      </div>
+
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -243,17 +300,18 @@ export default function Entries() {
         <CardContent>
           <div className="space-y-4">
             <div className="grid grid-cols-12 gap-2 font-semibold text-xs text-muted-foreground uppercase px-2">
-              <div className="col-span-3">Compte</div>
+              <div className="col-span-2">Compte</div>
               <div className="col-span-3">Libellé</div>
               <div className="col-span-2">Analytique</div>
+              <div className="col-span-1">Code Ana.</div>
               <div className="col-span-1.5 text-right">Débit</div>
               <div className="col-span-1.5 text-right">Crédit</div>
               <div className="col-span-1"></div>
             </div>
 
             {lines.map((line, index) => (
-              <div key={index} className="grid grid-cols-12 gap-2 items-center">
-                <div className="col-span-3">
+              <div key={index} className="grid grid-cols-12 gap-2 items-center p-2 rounded-lg transition-all hover:bg-muted/30 hover:shadow-sm group">
+                <div className="col-span-2">
                   <Select value={line.accountId} onValueChange={(v) => updateLine(index, 'accountId', v)}>
                     <SelectTrigger>
                       <SelectValue placeholder="Compte" />
@@ -280,14 +338,24 @@ export default function Entries() {
                     <SelectContent>
                       <SelectItem value="none">Aucun</SelectItem>
                       {analyticalPlans.map(p => (
-                        <SelectItem key={p.id} value={p.id}>{p.code}</SelectItem>
+                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="col-span-1">
+                  <Input 
+                    readOnly 
+                    disabled 
+                    value={analyticalPlans.find(p => p.id === line.analyticalId)?.code || ''} 
+                    className="h-9 text-xs font-mono bg-muted cursor-not-allowed"
+                    placeholder="Code"
+                  />
+                </div>
                 <div className="col-span-1.5">
                   <Input 
                     type="number" 
+                    min="0"
                     className="text-right" 
                     value={line.debit || ''} 
                     onChange={(e) => updateLine(index, 'debit', Number(e.target.value))}
@@ -296,6 +364,7 @@ export default function Entries() {
                 <div className="col-span-1.5">
                   <Input 
                     type="number" 
+                    min="0"
                     className="text-right" 
                     value={line.credit || ''} 
                     onChange={(e) => updateLine(index, 'credit', Number(e.target.value))}
@@ -326,6 +395,86 @@ export default function Entries() {
               </div>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <CardTitle>Historique des écritures</CardTitle>
+              <CardDescription>Consultez et filtrez les dernières écritures enregistrées.</CardDescription>
+            </div>
+            <div className="flex flex-wrap gap-2 items-center">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground whitespace-nowrap">Du:</span>
+                <Input 
+                  type="date" 
+                  className="h-8 w-36 text-xs" 
+                  value={startDate}
+                  onChange={e => setStartDate(e.target.value)}
+                />
+                <span className="text-xs text-muted-foreground">au:</span>
+                <Input 
+                  type="date" 
+                  className="h-8 w-36 text-xs" 
+                  value={endDate}
+                  onChange={e => setEndDate(e.target.value)}
+                />
+              </div>
+              <div className="relative w-48">
+                <Search className="absolute left-3 top-2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input 
+                  placeholder="Rechercher..." 
+                  className="pl-9 h-8 text-xs" 
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Journal</TableHead>
+                <TableHead>Référence</TableHead>
+                <TableHead>Libellé</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredTransactions.length > 0 ? (
+                filteredTransactions.map((tx) => (
+                  <TableRow key={tx.id} className="group">
+                    <TableCell className="text-sm">
+                      {format(new Date(tx.date), 'dd/MM/yyyy')}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className="text-[10px]">
+                        {journals.find(j => j.id === tx.journalId)?.code || 'JRN'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">{tx.reference}</TableCell>
+                    <TableCell className="text-sm max-w-[200px] truncate">{tx.description}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Calculator size={14} />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground text-sm">
+                    Aucune écriture trouvée pour cette période.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
     </div>

@@ -139,6 +139,8 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       label: "3. TRAITEMENT",
       items: [
         { icon: Receipt, label: 'Saisie Comptable', to: '/entries' },
+        { icon: FileText, label: 'Facturation', to: '/invoices' },
+        { icon: Layers, label: 'Produits & Stock', to: '/products' },
         { icon: Sparkles, label: 'Importation (OCR)', to: '/import' },
         { icon: ArrowRightLeft, label: 'Lettrage', to: '/lettering' },
         { icon: Landmark, label: 'Rapprochement Banc.', to: '/bank-recon' },
@@ -241,8 +243,8 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm md:hidden"
           onClick={() => setMobileMenuOpen(false)}
         >
-          <div className="fixed inset-y-0 left-0 w-64 bg-card p-6 shadow-lg">
-            <div className="flex items-center justify-between mb-8">
+          <div className="fixed inset-y-0 left-0 w-64 bg-card shadow-lg flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-6 border-b">
               <div className="flex items-center gap-2 font-bold text-xl text-primary">
                 <Building2 size={24} />
                 <span>VI Compt PRO</span>
@@ -251,33 +253,35 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 <X size={20} />
               </Button>
             </div>
-            <nav className="space-y-6">
-              {menuGroups.map((group) => (
-                <div key={group.label}>
-                  <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                    {group.label}
-                  </p>
-                  <div className="space-y-1">
-                    {group.items.map((item) => (
-                      <Link
-                        key={item.to}
-                        to={item.to}
-                        onClick={() => setMobileMenuOpen(false)}
-                        className={cn(
-                          "flex items-center gap-3 px-3 py-2 rounded-lg transition-colors",
-                          location.pathname === item.to 
-                            ? "bg-primary text-primary-foreground" 
-                            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                        )}
-                      >
-                        <item.icon size={18} />
-                        <span className="text-sm font-medium">{item.label}</span>
-                      </Link>
-                    ))}
+            <ScrollArea className="flex-1 p-6">
+              <nav className="space-y-6">
+                {menuGroups.map((group) => (
+                  <div key={group.label}>
+                    <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                      {group.label}
+                    </p>
+                    <div className="space-y-1">
+                      {group.items.map((item) => (
+                        <Link
+                          key={item.to}
+                          to={item.to}
+                          onClick={() => setMobileMenuOpen(false)}
+                          className={cn(
+                            "flex items-center gap-3 px-3 py-2 rounded-lg transition-colors",
+                            location.pathname === item.to 
+                              ? "bg-primary text-primary-foreground" 
+                              : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                          )}
+                        >
+                          <item.icon size={18} />
+                          <span className="text-sm font-medium">{item.label}</span>
+                        </Link>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </nav>
+                ))}
+              </nav>
+            </ScrollArea>
           </div>
         </div>
       )}
@@ -286,7 +290,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <header className="h-16 border-b bg-card flex items-center justify-between px-4 md:px-8 shrink-0">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-1">
             <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileMenuOpen(true)}>
               <Menu size={20} />
             </Button>
@@ -295,16 +299,31 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 {company?.name || 'Chargement...'}
               </h2>
             </div>
+            
+            {/* Global Search Bar */}
+            <div className="hidden lg:flex relative w-full max-w-md ml-8">
+              <Calculator className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <input 
+                type="text" 
+                placeholder="Recherche globale (Factures, Contacts, Comptes...)" 
+                className="w-full bg-muted/50 border-none rounded-full py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+              />
+            </div>
           </div>
 
           <div className="flex items-center gap-4">
             <NotificationBell />
-            <div className="flex flex-col items-end">
+            <div className="hidden sm:flex flex-col items-end">
               <span className="text-sm font-semibold">{userData?.displayName || 'Utilisateur'}</span>
               <span className="text-xs text-muted-foreground capitalize">{userData?.role?.replace('_', ' ')}</span>
             </div>
-            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
-              {userData?.displayName?.[0] || 'U'}
+            <div className="flex items-center gap-2">
+              <Link to="/settings" className="p-2 rounded-full hover:bg-accent transition-colors">
+                <Settings size={20} className="text-muted-foreground" />
+              </Link>
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold border-2 border-primary/20">
+                {userData?.displayName?.[0] || 'U'}
+              </div>
             </div>
           </div>
         </header>

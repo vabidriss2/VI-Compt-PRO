@@ -150,13 +150,6 @@ export default function Accounts() {
     }
   };
 
-  const filteredAccounts = accounts.filter(acc => {
-    const matchesSearch = acc.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         acc.code.includes(searchTerm);
-    const matchesType = filterType === 'all' || acc.type === filterType;
-    return matchesSearch && matchesType;
-  });
-
   const getTypeText = (type: string) => {
     switch (type) {
       case 'asset': return 'Actif';
@@ -178,6 +171,15 @@ export default function Accounts() {
       default: return 'bg-gray-100 text-gray-700';
     }
   };
+
+  const filteredAccounts = accounts.filter(acc => {
+    const typeText = getTypeText(acc.type).toLowerCase();
+    const matchesSearch = acc.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                         acc.code.includes(searchTerm) ||
+                         typeText.includes(searchTerm.toLowerCase());
+    const matchesType = filterType === 'all' || acc.type === filterType;
+    return matchesSearch && matchesType;
+  });
 
   return (
     <div className="space-y-6">
@@ -293,7 +295,7 @@ export default function Accounts() {
             <TableBody>
               {filteredAccounts.length > 0 ? (
                 filteredAccounts.map((acc) => (
-                  <TableRow key={acc.id}>
+                  <TableRow key={acc.id} className="group">
                     <TableCell className="font-mono font-bold">{acc.code}</TableCell>
                     <TableCell className="font-medium">{acc.name}</TableCell>
                     <TableCell>
@@ -307,27 +309,28 @@ export default function Accounts() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <Button 
                           variant="ghost" 
                           size="icon"
+                          className="h-8 w-8"
                           onClick={() => {
                             setEditingAccount(acc);
                             setIsEditOpen(true);
                           }}
                         >
-                          <Edit2 size={16} />
+                          <Edit2 size={14} />
                         </Button>
                         <Button 
                           variant="ghost" 
                           size="icon" 
-                          className="text-destructive"
+                          className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                           onClick={() => {
                             setDeletingAccount(acc);
                             setIsDeleteOpen(true);
                           }}
                         >
-                          <Trash2 size={16} />
+                          <Trash2 size={14} />
                         </Button>
                       </div>
                     </TableCell>

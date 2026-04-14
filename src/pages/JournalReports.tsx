@@ -69,14 +69,14 @@ export default function JournalReports() {
     const unsubscribeJournals = onSnapshot(
       query(collection(db, `companies/${userData.companyId}/journals`)),
       (snapshot) => setJournals(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
-      (error) => handleFirestoreError(error, OperationType.LIST, 'journals')
+      (error) => handleFirestoreError(error, OperationType.LIST, `companies/${userData.companyId}/journals`)
     );
 
     // Fetch Accounts
     const unsubscribeAccs = onSnapshot(
       query(collection(db, `companies/${userData.companyId}/accounts`)),
       (snapshot) => setAccounts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
-      (error) => handleFirestoreError(error, OperationType.LIST, 'accounts')
+      (error) => handleFirestoreError(error, OperationType.LIST, `companies/${userData.companyId}/accounts`)
     );
 
     return () => {

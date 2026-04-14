@@ -7,16 +7,20 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 import { Printer, Download, Search, Filter, FileText, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
+import { handleFirestoreError, OperationType } from '../lib/error-handler';
 
 export default function Drafts() {
   const { userData, company } = useAuth();
   const [entries, setEntries] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -28,12 +32,20 @@ export default function Drafts() {
     );
     return onSnapshot(q, (snapshot) => {
       setEntries(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `companies/${userData.companyId}/transactions`);
     });
   }, [userData]);
 
   const filteredEntries = entries.filter(e => {
     const searchStr = `${e.description} ${e.reference} ${e.journalId}`.toLowerCase();
-    return searchStr.includes(searchTerm.toLowerCase());
+    const matchesSearch = searchStr.includes(searchTerm.toLowerCase());
+    
+    const entryDate = e.date; // Assuming yyyy-mm-dd format
+    const matchesStartDate = !startDate || entryDate >= startDate;
+    const matchesEndDate = !endDate || entryDate <= endDate;
+    
+    return matchesSearch && matchesStartDate && matchesEndDate;
   });
 
   const exportPDF = () => {
@@ -49,7 +61,7 @@ export default function Drafts() {
       (e.totalCredit || 0).toLocaleString()
     ]);
 
-    doc.autoTable({
+    autoTable(doc, {
       head: [['Date', 'Journal', 'Référence', 'Libellé', 'Débit', 'Crédit']],
       body: tableData,
       startY: 20,
@@ -97,7 +109,33 @@ export default function Drafts() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Écritures en cours</CardTitle>
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground whitespace-nowrap">Période du:</span>
+                <Input 
+                  type="date" 
+                  className="h-9 w-40" 
+                  value={startDate}
+                  onChange={e => setStartDate(e.target.value)}
+                />
+                <span className="text-xs text-muted-foreground">au:</span>
+                <Input 
+                  type="date" 
+                  className="h-9 w-40" 
+                  value={endDate}
+                  onChange={e => setEndDate(e.target.value)}
+                />
+                {(startDate || endDate) && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => { setStartDate(''); setEndDate(''); }}
+                    className="h-9 px-2 text-xs"
+                  >
+                    Effacer
+                  </Button>
+                )}
+              </div>
               <div className="relative w-64">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input 
@@ -138,7 +176,12 @@ export default function Drafts() {
                     {(e.totalCredit || 0).toLocaleString()}
                   </TableCell>
                   <TableCell>
-                    <Badge variant="secondary">Brouillard</Badge>
+                    <div className="flex flex-col gap-1">
+                      <Badge variant={e.type === 'sale' ? 'default' : 'outline'} className={cn("w-fit text-[10px] uppercase", e.type === 'sale' ? "bg-blue-500 hover:bg-blue-600" : "border-amber-500 text-amber-600")}>
+                        {e.type === 'sale' ? 'Vente' : 'Achat'}
+                      </Badge>
+                      <Badge variant="secondary" className="w-fit text-[10px] uppercase">Brouillard</Badge>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

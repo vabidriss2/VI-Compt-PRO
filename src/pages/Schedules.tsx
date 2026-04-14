@@ -9,6 +9,7 @@ import { format, parseISO, isAfter, isBefore, addDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Calendar as CalendarIcon, Clock, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { handleFirestoreError, OperationType } from '../lib/error-handler';
 
 export default function Schedules() {
   const { userData, company } = useAuth();
@@ -24,11 +25,15 @@ export default function Schedules() {
     );
     const unsubscribeInvoices = onSnapshot(qInvoices, (snapshot) => {
       setInvoices(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `companies/${userData.companyId}/invoices`);
     });
 
     const qContacts = query(collection(db, `companies/${userData.companyId}/contacts`));
     const unsubscribeContacts = onSnapshot(qContacts, (snapshot) => {
       setContacts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `companies/${userData.companyId}/contacts`);
     });
 
     return () => {

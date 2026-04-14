@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { collection, query, onSnapshot, where, addDoc, serverTimestamp, orderBy } from 'firebase/firestore';
+import { collection, query, onSnapshot, where, addDoc, serverTimestamp, orderBy, doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { ArrowRightLeft, FileOutput, CheckCircle2, Landmark, Plus, Loader2, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { logAction } from '../lib/audit';
+import { handleFirestoreError, OperationType } from '../lib/error-handler';
 
 import { downloadCSV } from '../lib/download-utils';
 
@@ -37,6 +38,8 @@ export default function Payments() {
 
     const unsubscribeInvoices = onSnapshot(qInvoices, (snapshot) => {
       setInvoices(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `companies/${userData.companyId}/invoices`);
     });
 
     // Fetch generated batches
@@ -47,6 +50,8 @@ export default function Payments() {
 
     const unsubscribeBatches = onSnapshot(qBatches, (snapshot) => {
       setBatches(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `companies/${userData.companyId}/payment_batches`);
     });
 
     return () => {
@@ -77,6 +82,32 @@ export default function Payments() {
       toast.success("Fichier SEPA XML généré avec succès !");
     } catch (error) {
       toast.error("Erreur lors de la génération du fichier");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMarkAsPaid = async (batchId: string) => {
+    if (!confirm("Marquer ce lot comme payé ? Cela mettra à jour toutes les factures associées.")) return;
+    
+    setLoading(true);
+    try {
+      const batchRef = doc(db, `companies/${userData!.companyId}/payment_batches`, batchId);
+      await updateDoc(batchRef, { status: 'paid', paidAt: serverTimestamp() });
+      
+      // In a real app, we would track which invoices are in which batch.
+      // For this demo, let's mark all currently pending purchase invoices as paid.
+      const batch = writeBatch(db);
+      invoices.forEach(inv => {
+        const invRef = doc(db, `companies/${userData!.companyId}/invoices`, inv.id);
+        batch.update(invRef, { status: 'paid' });
+      });
+      await batch.commit();
+      
+      await logAction(userData!.companyId, userData!.uid, 'UPDATE', 'payment_batches', batchId, { status: 'paid' });
+      toast.success("Lot marqué comme payé et factures mises à jour !");
+    } catch (error) {
+      toast.error("Erreur lors de la mise à jour");
     } finally {
       setLoading(false);
     }
@@ -128,9 +159,19 @@ export default function Payments() {
           <CardContent className="space-y-3">
             {batches.map((b) => (
               <div key={b.id} className="flex justify-between items-center text-xs">
-                <span className="font-medium">{b.reference}</span>
+                <div className="flex flex-col">
+                  <span className="font-medium">{b.reference}</span>
+                  <span className="text-[10px] text-muted-foreground">{b.totalAmount.toLocaleString()} {company?.currency}</span>
+                </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="secondary">Généré</Badge>
+                  <Badge variant={b.status === 'paid' ? 'default' : 'secondary'}>
+                    {b.status === 'paid' ? 'Payé' : 'Généré'}
+                  </Badge>
+                  {b.status !== 'paid' && (
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-emerald-600" onClick={() => handleMarkAsPaid(b.id)}>
+                      <CheckCircle2 size={12} />
+                    </Button>
+                  )}
                   <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDownloadBatch(b)}>
                     <Download size={12} />
                   </Button>

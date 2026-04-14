@@ -11,6 +11,7 @@ import { fr } from 'date-fns/locale';
 import { Send, History, AlertTriangle, MessageSquare, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { sendEmailSimulation } from '../services/emailService';
+import { handleFirestoreError, OperationType } from '../lib/error-handler';
 
 export default function Reminders() {
   const { userData, company } = useAuth();
@@ -30,11 +31,15 @@ export default function Reminders() {
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setOverdueInvoices(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `companies/${userData.companyId}/invoices`);
     });
 
     const qContacts = query(collection(db, `companies/${userData.companyId}/contacts`));
     const unsubscribeContacts = onSnapshot(qContacts, (snapshot) => {
       setContacts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `companies/${userData.companyId}/contacts`);
     });
 
     return () => {

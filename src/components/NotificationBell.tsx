@@ -4,6 +4,7 @@ import {
   DropdownMenu, 
   DropdownMenuContent, 
   DropdownMenuItem, 
+  DropdownMenuGroup,
   DropdownMenuLabel, 
   DropdownMenuSeparator, 
   DropdownMenuTrigger 
@@ -21,6 +22,23 @@ export const NotificationBell = () => {
   const { userData } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [prevUnreadCount, setPrevUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (unreadCount > prevUnreadCount) {
+      const playSound = () => {
+        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+        audio.volume = 0.5;
+        audio.play().catch(e => {
+          // Silent catch for browser autoplay policies
+          console.log('Autoplay blocked - sound will play after user interaction');
+        });
+      };
+      
+      playSound();
+    }
+    setPrevUnreadCount(unreadCount);
+  }, [unreadCount, prevUnreadCount]);
 
   useEffect(() => {
     if (!userData?.companyId) return;
@@ -71,19 +89,21 @@ export const NotificationBell = () => {
         </Button>
       } />
       <DropdownMenuContent align="end" className="w-80 p-0">
-        <DropdownMenuLabel className="p-4 flex items-center justify-between">
-          <span className="text-sm font-bold">Notifications</span>
-          {unreadCount > 0 && (
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="h-auto p-0 text-xs text-primary hover:bg-transparent"
-              onClick={handleMarkAllRead}
-            >
-              Tout marquer comme lu
-            </Button>
-          )}
-        </DropdownMenuLabel>
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="p-4 flex items-center justify-between">
+            <span className="text-sm font-bold">Notifications</span>
+            {unreadCount > 0 && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-auto p-0 text-xs text-primary hover:bg-transparent"
+                onClick={handleMarkAllRead}
+              >
+                Tout marquer comme lu
+              </Button>
+            )}
+          </DropdownMenuLabel>
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <ScrollArea className="h-[400px]">
           {notifications.length > 0 ? (

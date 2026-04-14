@@ -197,29 +197,30 @@ export default function AnalyticalPlans() {
             <TableBody>
               {plans.length > 0 ? (
                 plans.map((plan) => (
-                  <TableRow key={plan.id}>
+                  <TableRow key={plan.id} className="group">
                     <TableCell className="font-bold">{plan.code}</TableCell>
                     <TableCell>{plan.name}</TableCell>
                     <TableCell className="text-muted-foreground">{plan.description || '-'}</TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <Button 
                           variant="ghost" 
                           size="icon"
+                          className="h-8 w-8"
                           onClick={() => {
                             setEditingPlan(plan);
                             setIsEditOpen(true);
                           }}
                         >
-                          <Edit2 size={16} />
+                          <Edit2 size={14} />
                         </Button>
                         <Button 
                           variant="ghost" 
                           size="icon" 
-                          className="text-destructive"
+                          className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                           onClick={() => handleDeletePlan(plan.id)}
                         >
-                          <Trash2 size={16} />
+                          <Trash2 size={14} />
                         </Button>
                       </div>
                     </TableCell>

@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { logAction } from '../lib/audit';
+import { handleFirestoreError, OperationType } from '../lib/error-handler';
 
 export default function Closings() {
   const { userData } = useAuth();
@@ -38,6 +39,8 @@ export default function Closings() {
         });
       }
       setPeriods(all);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `companies/${userData.companyId}/periods`);
     });
 
     return () => unsubscribe();

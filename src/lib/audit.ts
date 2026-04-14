@@ -10,12 +10,14 @@ export async function logAction(
   details: any
 ) {
   try {
+    if (!companyId) return;
+    
     await addDoc(collection(db, `companies/${companyId}/audit_logs`), {
-      userId,
+      userId: userId || 'unknown',
       action,
       collection: collectionName,
       documentId,
-      details,
+      details: details || {},
       timestamp: new Date().toISOString(),
       companyId
     });

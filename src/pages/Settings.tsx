@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Building2, User, Shield, Bell, Globe, Save } from 'lucide-react';
+import { Building2, User, Shield, Bell, Globe, Save, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { handleFirestoreError, OperationType } from '../lib/error-handler';
@@ -32,15 +32,37 @@ export default function Settings() {
   const [taxId, setTaxId] = useState(company?.taxId || '');
   const [currency, setCurrency] = useState(company?.currency || 'XAF');
   const [loading, setLoading] = useState(false);
+  const [displayName, setDisplayName] = useState(userData?.displayName || '');
 
   // Sync state with company data when it loads
   useEffect(() => {
     if (company) {
       setCompanyName(company.name || '');
       setTaxId(company.taxId || '');
-      setCurrency(company.currency || 'XAF');
+      if (company.currency) {
+        setCurrency(company.currency);
+      }
     }
-  }, [company]);
+    if (userData) {
+      setDisplayName(userData.displayName || '');
+    }
+  }, [company, userData]);
+
+  const handleUpdateProfile = async () => {
+    if (!userData?.uid) return;
+    setLoading(true);
+    try {
+      await updateDoc(doc(db, 'users', userData.uid), {
+        displayName: displayName
+      });
+      toast.success("Profil mis à jour !");
+    } catch (error: any) {
+      handleFirestoreError(error, OperationType.UPDATE, `users/${userData.uid}`);
+      toast.error("Erreur : " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleUpdateCompany = async () => {
     if (!userData?.companyId) return;
@@ -79,6 +101,9 @@ export default function Settings() {
           <TabsTrigger value="security" className="gap-2">
             <Shield size={16} /> Sécurité
           </TabsTrigger>
+          <TabsTrigger value="installation" className="gap-2">
+            <Globe size={16} /> Installation
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="company">
@@ -87,8 +112,8 @@ export default function Settings() {
               <CardTitle>Informations de l'entreprise</CardTitle>
               <CardDescription>Ces informations apparaîtront sur vos factures et rapports.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="companyName">Nom de l'entreprise</Label>
                   <Input 
@@ -107,29 +132,27 @@ export default function Settings() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Devise de base</Label>
-                  <Select value={currency} onValueChange={setCurrency}>
-                    <SelectTrigger>
-                      <div className="flex items-center gap-2">
-                        <Globe size={16} className="text-muted-foreground" />
-                        <SelectValue placeholder="Choisir une devise" />
-                      </div>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {AFRICAN_CURRENCIES.map((c) => (
-                        <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">Note : Changer la devise de base peut affecter la cohérence de vos rapports existants.</p>
-                </div>
+              <div className="space-y-2">
+                <Label>Devise de base</Label>
+                <Select value={currency} onValueChange={setCurrency}>
+                  <SelectTrigger className="w-full lg:w-1/2">
+                    <div className="flex items-center gap-2">
+                      <Globe size={16} className="text-muted-foreground" />
+                      <SelectValue placeholder="Choisir une devise" />
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {AFRICAN_CURRENCIES.map((c) => (
+                      <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Note : Changer la devise de base peut affecter la cohérence de vos rapports existants.</p>
               </div>
-              <div className="flex justify-end pt-4">
-                <Button onClick={handleUpdateCompany} disabled={loading} className="gap-2">
+              <div className="flex justify-end pt-4 border-t">
+                <Button onClick={handleUpdateCompany} disabled={loading} className="gap-2 w-full lg:w-auto">
                   <Save size={18} />
-                  {loading ? "Enregistrement..." : "Enregistrer les modifications"}
+                  {loading ? "Synchronisation..." : "Sauvegarder & Synchroniser"}
                 </Button>
               </div>
             </CardContent>
@@ -152,7 +175,7 @@ export default function Settings() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Nom complet</Label>
-                  <Input value={userData?.displayName} />
+                  <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
                 </div>
                 <div className="space-y-2">
                   <Label>Email</Label>
@@ -160,8 +183,9 @@ export default function Settings() {
                 </div>
               </div>
               <div className="flex justify-end pt-4">
-                <Button className="gap-2">
-                  <Save size={18} /> Sauvegarder
+                <Button onClick={handleUpdateProfile} disabled={loading} className="gap-2">
+                  <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
+                  {loading ? "Synchronisation..." : "Sauvegarder & Synchroniser"}
                 </Button>
               </div>
             </CardContent>
@@ -197,6 +221,23 @@ export default function Settings() {
                   </div>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="installation">
+          <Card>
+            <CardHeader>
+              <CardTitle>Installation sur votre environnement</CardTitle>
+              <CardDescription>Installez VI Compt PRO en tant qu'application locale sur Windows, Linux ou Mac.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Vous pouvez installer VI Compt PRO pour y accéder directement depuis votre bureau.
+              </p>
+              <Button className="gap-2" onClick={() => window.open('/README.md', '_blank')}>
+                <Globe size={18} /> Voir le guide d'installation
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>

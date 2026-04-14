@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Plus, Trash2, Edit, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { logAction } from '../lib/audit';
+import { handleFirestoreError, OperationType } from '../lib/error-handler';
 
 export default function EntryTemplates() {
   const { userData } = useAuth();
@@ -24,6 +25,8 @@ export default function EntryTemplates() {
     const q = query(collection(db, `companies/${userData.companyId}/entry_templates`));
     return onSnapshot(q, (snapshot) => {
       setTemplates(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `companies/${userData.companyId}/entry_templates`);
     });
   }, [userData]);
 

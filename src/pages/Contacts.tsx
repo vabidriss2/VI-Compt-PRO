@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { collection, query, onSnapshot, addDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, query, onSnapshot, addDoc, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { 
@@ -46,6 +46,10 @@ export default function Contacts() {
   const [contacts, setContacts] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editingContact, setEditingContact] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+
   const [newContact, setNewContact] = useState({
     name: '',
     type: 'customer',
@@ -73,6 +77,7 @@ export default function Contacts() {
       return;
     }
 
+    setLoading(true);
     try {
       const path = `companies/${userData.companyId}/contacts`;
       await addDoc(collection(db, path), {
@@ -85,6 +90,39 @@ export default function Contacts() {
       setNewContact({ name: '', type: 'customer', email: '', phone: '', address: '' });
     } catch (error: any) {
       handleFirestoreError(error, OperationType.WRITE, `companies/${userData.companyId}/contacts`);
+      toast.error("Erreur : " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateContact = async () => {
+    if (!editingContact.name || !userData?.companyId) return;
+    
+    setLoading(true);
+    try {
+      const contactRef = doc(db, `companies/${userData.companyId}/contacts`, editingContact.id);
+      const { id, ...updateData } = editingContact;
+      await updateDoc(contactRef, updateData);
+      toast.success("Contact mis à jour !");
+      setIsEditOpen(false);
+      setEditingContact(null);
+    } catch (error: any) {
+      handleFirestoreError(error, OperationType.UPDATE, `companies/${userData.companyId}/contacts/${editingContact.id}`);
+      toast.error("Erreur : " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteContact = async (id: string) => {
+    if (!confirm("Supprimer ce contact ?")) return;
+    
+    try {
+      await deleteDoc(doc(db, `companies/${userData.companyId}/contacts`, id));
+      toast.success("Contact supprimé !");
+    } catch (error: any) {
+      handleFirestoreError(error, OperationType.DELETE, `companies/${userData.companyId}/contacts/${id}`);
       toast.error("Erreur : " + error.message);
     }
   };
@@ -204,7 +242,7 @@ export default function Contacts() {
             <TableBody>
               {filteredContacts.length > 0 ? (
                 filteredContacts.map((contact) => (
-                  <TableRow key={contact.id}>
+                  <TableRow key={contact.id} className="group">
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold">
@@ -235,9 +273,26 @@ export default function Contacts() {
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button variant="ghost" size="icon"><Edit2 size={16} /></Button>
-                        <Button variant="ghost" size="icon" className="text-destructive"><Trash2 size={16} /></Button>
+                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => {
+                            setEditingContact(contact);
+                            setIsEditOpen(true);
+                          }}
+                        >
+                          <Edit2 size={14} />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => handleDeleteContact(contact.id)}
+                        >
+                          <Trash2 size={14} />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -253,6 +308,77 @@ export default function Contacts() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Modifier le contact</DialogTitle>
+          </DialogHeader>
+          {editingContact && (
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-name" className="text-right">Nom</Label>
+                <Input 
+                  id="edit-name" 
+                  className="col-span-3" 
+                  value={editingContact.name}
+                  onChange={(e) => setEditingContact({...editingContact, name: e.target.value})}
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-type" className="text-right">Type</Label>
+                <Select 
+                  value={editingContact.type} 
+                  onValueChange={(v) => setEditingContact({...editingContact, type: v})}
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="customer">Client</SelectItem>
+                    <SelectItem value="supplier">Fournisseur</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-email" className="text-right">Email</Label>
+                <Input 
+                  id="edit-email" 
+                  type="email"
+                  className="col-span-3" 
+                  value={editingContact.email}
+                  onChange={(e) => setEditingContact({...editingContact, email: e.target.value})}
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-phone" className="text-right">Téléphone</Label>
+                <Input 
+                  id="edit-phone" 
+                  className="col-span-3" 
+                  value={editingContact.phone}
+                  onChange={(e) => setEditingContact({...editingContact, phone: e.target.value})}
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="edit-address" className="text-right">Adresse</Label>
+                <Input 
+                  id="edit-address" 
+                  className="col-span-3" 
+                  value={editingContact.address}
+                  onChange={(e) => setEditingContact({...editingContact, address: e.target.value})}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditOpen(false)}>Annuler</Button>
+            <Button onClick={handleUpdateContact} disabled={loading}>
+              {loading ? "Mise à jour..." : "Mettre à jour"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

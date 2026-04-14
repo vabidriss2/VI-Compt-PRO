@@ -49,6 +49,23 @@ export default function Reports() {
     downloadPDF(`Rapport Financier - ${company?.name}`, headers, data, `Rapport_Financier_${new Date().getFullYear()}`);
   };
 
+  const handleExportAllPDF = () => {
+    const headers = [['Code', 'Compte', 'Solde']];
+    const data = [
+      ['--- ACTIF ---', '', ''],
+      ...reportData.assets.map((a: any) => [a.code, a.name, a.balance.toLocaleString()]),
+      ['--- PASSIF ---', '', ''],
+      ...reportData.liabilities.map((l: any) => [l.code, l.name, l.balance.toLocaleString()]),
+      ['--- CAPITAUX PROPRES ---', '', ''],
+      ...reportData.equity.map((e: any) => [e.code, e.name, e.balance.toLocaleString()]),
+      ['--- PRODUITS ---', '', ''],
+      ...reportData.revenue.map((r: any) => [r.code, r.name, r.balance.toLocaleString()]),
+      ['--- CHARGES ---', '', ''],
+      ...reportData.expenses.map((ex: any) => [ex.code, ex.name, ex.balance.toLocaleString()])
+    ];
+    downloadPDF(`Rapport Complet - ${company?.name}`, headers, data, `Rapport_Complet_${new Date().getFullYear()}`);
+  };
+
   useEffect(() => {
     if (!userData?.companyId) return;
     fetchReportData();
@@ -140,6 +157,9 @@ export default function Reports() {
         <div className="flex gap-2">
           <Button variant="outline" className="gap-2" onClick={handleExportPDF}>
             <Download size={18} /> PDF
+          </Button>
+          <Button variant="default" className="gap-2" onClick={handleExportAllPDF}>
+            <Download size={18} /> Exporter Tout
           </Button>
           <Button variant="outline" className="gap-2" onClick={() => exportToExcel('Rapport_Financier', [...reportData.assets, ...reportData.liabilities])}>
             <FileSpreadsheet size={18} /> Excel

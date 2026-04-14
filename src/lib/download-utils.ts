@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
 
 export const downloadPDF = (title: string, headers: string[][], data: any[][], filename: string) => {
@@ -10,7 +10,7 @@ export const downloadPDF = (title: string, headers: string[][], data: any[][], f
     doc.setFontSize(10);
     doc.text(`Généré le: ${new Date().toLocaleString()}`, 14, 30);
 
-    (doc as any).autoTable({
+    autoTable(doc, {
       startY: 35,
       head: headers,
       body: data,

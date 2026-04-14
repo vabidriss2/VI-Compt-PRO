@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { logAction } from '../lib/audit';
 
 import { downloadPDF } from '../lib/download-utils';
+import { handleFirestoreError, OperationType } from '../lib/error-handler';
 
 export default function VAT() {
   const { userData, company } = useAuth();
@@ -57,6 +58,8 @@ export default function VAT() {
         setVatData({ collected, deductible, baseCollected, baseDeductible });
         setLoading(false);
         toast.success("Calcul de TVA terminé pour la période " + period);
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, `companies/${userData!.companyId}/invoices`);
       });
 
       return () => unsubscribe();

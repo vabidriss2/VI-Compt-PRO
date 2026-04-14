@@ -189,7 +189,7 @@ export default function Taxes() {
             <TableBody>
               {taxes.length > 0 ? (
                 taxes.map((tax) => (
-                  <TableRow key={tax.id}>
+                  <TableRow key={tax.id} className="group">
                     <TableCell className="font-medium">{tax.name}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
@@ -202,27 +202,28 @@ export default function Taxes() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <Button 
                           variant="ghost" 
                           size="icon"
+                          className="h-8 w-8"
                           onClick={() => {
                             setEditingTax(tax);
                             setIsEditOpen(true);
                           }}
                         >
-                          <Edit2 size={16} />
+                          <Edit2 size={14} />
                         </Button>
                         <Button 
                           variant="ghost" 
                           size="icon" 
-                          className="text-destructive"
+                          className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                           onClick={() => {
                             setDeletingTax(tax);
                             setIsDeleteOpen(true);
                           }}
                         >
-                          <Trash2 size={16} />
+                          <Trash2 size={14} />
                         </Button>
                       </div>
                     </TableCell>

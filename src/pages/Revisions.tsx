@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { CheckCircle2, AlertCircle, Search, Filter, ClipboardCheck, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { logAction } from '../lib/audit';
+import { handleFirestoreError, OperationType } from '../lib/error-handler';
 
 export default function Revisions() {
   const { userData } = useAuth();
@@ -43,6 +44,8 @@ export default function Revisions() {
         });
       }
       setRevisions(all);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `companies/${userData.companyId}/revisions`);
     });
 
     return () => unsubscribe();

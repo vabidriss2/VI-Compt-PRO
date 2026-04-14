@@ -1,20 +1,53 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# VI Compt PRO
 
-# Run and deploy your AI Studio app
+Production-ready, scalable accounting software with AI-powered insights, real-time analytics, and enterprise-grade reliability.
 
-This contains everything you need to run your app locally.
+## Prerequisites
 
-View your app in AI Studio: https://ai.studio/apps/e3f9bd10-068c-4f45-8453-5b04d3e38fe9
+- Node.js (v18 or higher recommended)
+- npm (v9 or higher recommended)
 
-## Run Locally
+## Installation
 
-**Prerequisites:**  Node.js
+1. Clone the repository:
+   ```bash
+   git clone <repository-url>
+   cd <project-directory>
+   ```
 
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+3. Setup environment variables:
+   - Copy `.env.example` to `.env`.
+   - Fill in the required environment variables (e.g., Firebase configuration).
+
+## Development
+
+To run the application in development mode:
+
+```bash
+npm run dev
+```
+
+The application will be available at `http://localhost:3000`.
+
+## Production
+
+To build the application for production:
+
+```bash
+npm run build
+```
+
+To start the production server:
+
+```bash
+npm start
+```
+
+## Deployment
+
+This application is designed to be deployed in a Node.js environment. Ensure the `PORT` environment variable is set to `3000` if necessary, though the platform typically handles this.

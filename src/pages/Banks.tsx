@@ -62,9 +62,29 @@ export default function Banks() {
     return () => unsubscribe();
   }, [userData]);
 
+  const validateIBAN = (iban: string) => {
+    const ibanRegex = /^[A-Z]{2}[0-9]{2}[A-Z0-9]{4,30}$/;
+    return ibanRegex.test(iban.replace(/\s/g, ''));
+  };
+
+  const validateBIC = (bic: string) => {
+    const bicRegex = /^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/;
+    return bicRegex.test(bic.replace(/\s/g, ''));
+  };
+
   const handleAddBank = async () => {
     if (!newBank.name || !newBank.iban) {
       toast.error("Le nom et l'IBAN sont obligatoires.");
+      return;
+    }
+
+    if (!validateIBAN(newBank.iban)) {
+      toast.error("Format d'IBAN invalide.");
+      return;
+    }
+
+    if (newBank.bic && !validateBIC(newBank.bic)) {
+      toast.error("Format de BIC invalide.");
       return;
     }
 
@@ -90,6 +110,16 @@ export default function Banks() {
   const handleUpdateBank = async () => {
     if (!editingBank.name || !editingBank.iban) {
       toast.error("Le nom et l'IBAN sont obligatoires.");
+      return;
+    }
+
+    if (!validateIBAN(editingBank.iban)) {
+      toast.error("Format d'IBAN invalide.");
+      return;
+    }
+
+    if (editingBank.bic && !validateBIC(editingBank.bic)) {
+      toast.error("Format de BIC invalide.");
       return;
     }
 
@@ -209,7 +239,7 @@ export default function Banks() {
             <TableBody>
               {banks.length > 0 ? (
                 banks.map((bank) => (
-                  <TableRow key={bank.id}>
+                  <TableRow key={bank.id} className="group">
                     <TableCell className="font-bold">
                       <div className="flex items-center gap-2">
                         <CreditCard size={16} className="text-primary" />
@@ -222,24 +252,25 @@ export default function Banks() {
                       <Badge variant="outline">{bank.currency}</Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <Button 
                           variant="ghost" 
                           size="icon"
+                          className="h-8 w-8"
                           onClick={() => {
                             setEditingBank(bank);
                             setIsEditOpen(true);
                           }}
                         >
-                          <Edit2 size={16} />
+                          <Edit2 size={14} />
                         </Button>
                         <Button 
                           variant="ghost" 
                           size="icon" 
-                          className="text-destructive"
+                          className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                           onClick={() => handleDeleteBank(bank.id)}
                         >
-                          <Trash2 size={16} />
+                          <Trash2 size={14} />
                         </Button>
                       </div>
                     </TableCell>

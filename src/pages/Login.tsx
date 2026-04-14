@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { auth, db } from '../lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Building2, Mail, Lock, LogIn } from 'lucide-react';
+import { Building2, Mail, Lock, LogIn, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { handleFirestoreError, OperationType } from '../lib/error-handler';
 
@@ -15,6 +15,7 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -34,10 +35,37 @@ export default function Login() {
         navigate('/');
       }
     } catch (error: any) {
-      handleFirestoreError(error, OperationType.GET, `users/${email}`);
-      toast.error("Erreur de connexion : " + error.message);
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+        toast.error("Email ou mot de passe incorrect. Si vous vous êtes inscrit avec Google, vous devez définir un mot de passe via 'Mot de passe oublié'.");
+      } else {
+        handleFirestoreError(error, OperationType.GET, `users/${email}`);
+        toast.error("Erreur de connexion : " + error.message);
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    console.log("Tentative de réinitialisation pour:", email);
+    if (!email || !email.includes('@')) {
+      toast.error("Veuillez saisir une adresse email valide dans le champ Email ci-dessus.");
+      return;
+    }
+    setResetLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, email);
+      console.log("Email de réinitialisation envoyé avec succès");
+      toast.success("Email de réinitialisation envoyé ! Vérifiez votre boîte de réception (et vos spams).");
+    } catch (error: any) {
+      console.error("Erreur réinitialisation mot de passe:", error);
+      if (error.code === 'auth/user-not-found') {
+        toast.error("Aucun compte n'est associé à cette adresse email.");
+      } else {
+        toast.error("Erreur : " + error.message);
+      }
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -58,8 +86,12 @@ export default function Login() {
         navigate('/');
       }
     } catch (error: any) {
-      handleFirestoreError(error, OperationType.GET, 'users/google');
-      toast.error("Erreur Google Login : " + error.message);
+      if (error.code === 'auth/popup-closed-by-user') {
+        toast.error("Connexion annulée.");
+      } else {
+        handleFirestoreError(error, OperationType.GET, 'users/google');
+        toast.error("Erreur Google Login : " + error.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -80,6 +112,12 @@ export default function Login() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="mb-6 p-3 bg-blue-50 border border-blue-100 rounded-lg flex gap-3 text-sm text-blue-800">
+            <AlertCircle className="h-5 w-5 shrink-0" />
+            <p>
+              <strong>Note :</strong> Si vous vous êtes inscrit via Google, vous n'avez pas de mot de passe par défaut. Pour utiliser la connexion par email, cliquez sur <strong>"Mot de passe oublié ?"</strong>.
+            </p>
+          </div>
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -97,7 +135,17 @@ export default function Login() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Mot de passe</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Mot de passe</Label>
+                <button 
+                  type="button" 
+                  onClick={handleForgotPassword}
+                  disabled={resetLoading}
+                  className="text-xs text-primary hover:underline"
+                >
+                  {resetLoading ? "Envoi..." : "Mot de passe oublié ?"}
+                </button>
+              </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input 

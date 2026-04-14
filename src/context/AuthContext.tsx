@@ -36,7 +36,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const userDoc = await getDoc(doc(db, 'users', user.uid));
         if (userDoc.exists()) {
           const data = userDoc.data();
-          setUserData(data);
+          const fullUserData = { ...data, uid: user.uid };
+          setUserData(fullUserData);
           
           // Fetch company data
           if (data.companyId) {
