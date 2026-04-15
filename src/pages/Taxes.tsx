@@ -29,14 +29,18 @@ import {
   DialogTitle, 
   DialogTrigger 
 } from '@/components/ui/dialog';
-import { Plus, Edit2, Trash2, Percent } from 'lucide-react';
+import { Plus, Edit2, Trash2, Percent, Search, Info, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { handleFirestoreError, OperationType } from '../lib/error-handler';
+import { cn } from '@/lib/utils';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function Taxes() {
   const { userData } = useAuth();
   const [taxes, setTaxes] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
@@ -44,7 +48,8 @@ export default function Taxes() {
   const [newTax, setNewTax] = useState({
     name: '',
     rate: 0,
-    isActive: true
+    isActive: true,
+    accountId: ''
   });
   
   const [editingTax, setEditingTax] = useState<any>(null);
@@ -61,7 +66,17 @@ export default function Taxes() {
       handleFirestoreError(error, OperationType.LIST, `companies/${userData.companyId}/taxes`);
     });
 
-    return () => unsubscribe();
+    const qAccounts = query(collection(db, `companies/${userData.companyId}/accounts`));
+    const unsubscribeAccounts = onSnapshot(qAccounts, (snapshot) => {
+      setAccounts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `companies/${userData.companyId}/accounts`);
+    });
+
+    return () => {
+      unsubscribe();
+      unsubscribeAccounts();
+    };
   }, [userData]);
 
   const handleAddTax = async () => {
@@ -78,7 +93,7 @@ export default function Taxes() {
       });
       toast.success("Taxe ajoutée !");
       setIsAddOpen(false);
-      setNewTax({ name: '', rate: 0, isActive: true });
+      setNewTax({ name: '', rate: 0, isActive: true, accountId: '' });
     } catch (error: any) {
       handleFirestoreError(error, OperationType.WRITE, `companies/${userData.companyId}/taxes`);
       toast.error("Erreur : " + error.message);
@@ -123,12 +138,16 @@ export default function Taxes() {
     }
   };
 
+  const filteredTaxes = taxes.filter(t => 
+    t.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Gestion des Taxes</h1>
-          <p className="text-muted-foreground">Configurez les taux de TVA et autres taxes.</p>
+          <p className="text-muted-foreground">Configurez les taux de TVA et autres taxes pour vos opérations.</p>
         </div>
         <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
           <DialogTrigger render={
@@ -136,73 +155,115 @@ export default function Taxes() {
               <Plus size={18} /> Nouvelle Taxe
             </Button>
           } />
-          <DialogContent>
+          <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
               <DialogTitle>Ajouter une taxe</DialogTitle>
-              <DialogDescription>Définissez un nouveau taux de taxe pour votre entreprise.</DialogDescription>
+              <DialogDescription>Définissez un nouveau taux de taxe et son compte comptable associé.</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="name" className="text-right">Nom</Label>
+              <div className="space-y-2">
+                <Label htmlFor="name">Nom de la taxe</Label>
                 <Input 
                   id="name" 
-                  className="col-span-3" 
-                  placeholder="ex: TVA 20%"
+                  placeholder="ex: TVA Collectée 20%"
                   value={newTax.name}
                   onChange={(e) => setNewTax({...newTax, name: e.target.value})}
                 />
               </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="rate" className="text-right">Taux (%)</Label>
-                <Input 
-                  id="rate" 
-                  type="number"
-                  className="col-span-3" 
-                  value={newTax.rate}
-                  onChange={(e) => setNewTax({...newTax, rate: parseFloat(e.target.value)})}
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="rate">Taux (%)</Label>
+                  <div className="relative">
+                    <Input 
+                      id="rate" 
+                      type="number"
+                      step="0.01"
+                      className="pr-8"
+                      value={newTax.rate}
+                      onChange={(e) => setNewTax({...newTax, rate: parseFloat(e.target.value)})}
+                    />
+                    <Percent size={14} className="absolute right-3 top-3 text-muted-foreground" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="account">Compte Comptable</Label>
+                  <Select value={newTax.accountId} onValueChange={(v) => setNewTax({...newTax, accountId: v})}>
+                    <SelectTrigger id="account">
+                      <SelectValue placeholder="Sélectionner..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {accounts.filter(a => a.code.startsWith('445')).map(acc => (
+                        <SelectItem key={acc.id} value={acc.id}>{acc.code} - {acc.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsAddOpen(false)}>Annuler</Button>
-              <Button onClick={handleAddTax}>Enregistrer</Button>
+              <Button onClick={handleAddTax}>Créer la taxe</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Taxes configurées</CardTitle>
-          <CardDescription>Liste des taxes disponibles pour vos factures.</CardDescription>
+      <Card className="border-primary/10 shadow-sm">
+        <CardHeader className="pb-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <CardTitle>Taxes configurées</CardTitle>
+              <CardDescription>Liste des taxes disponibles pour vos factures et écritures.</CardDescription>
+            </div>
+            <div className="relative w-full md:w-72">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input 
+                placeholder="Rechercher une taxe..." 
+                className="pl-9 h-9"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Nom</TableHead>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Nom de la Taxe</TableHead>
                 <TableHead>Taux</TableHead>
+                <TableHead>Compte Associé</TableHead>
                 <TableHead>Statut</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {taxes.length > 0 ? (
-                taxes.map((tax) => (
-                  <TableRow key={tax.id} className="group">
+              {filteredTaxes.length > 0 ? (
+                filteredTaxes.map((tax) => (
+                  <TableRow key={tax.id} className="group hover:bg-muted/30 transition-colors">
                     <TableCell className="font-medium">{tax.name}</TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-1">
-                        {tax.rate}% <Percent size={14} className="text-muted-foreground" />
-                      </div>
+                      <Badge variant="secondary" className="font-mono">
+                        {tax.rate}%
+                      </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={tax.isActive ? 'default' : 'secondary'}>
+                      {tax.accountId ? (
+                        <div className="flex flex-col">
+                          <span className="text-xs font-mono text-primary">{accounts.find(a => a.id === tax.accountId)?.code}</span>
+                          <span className="text-[10px] text-muted-foreground truncate max-w-[150px]">{accounts.find(a => a.id === tax.accountId)?.name}</span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground italic">Non défini</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={tax.isActive ? 'default' : 'secondary'} className={cn(tax.isActive ? "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-emerald-500/20" : "")}>
                         {tax.isActive ? 'Actif' : 'Inactif'}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <Button 
                           variant="ghost" 
                           size="icon"
@@ -231,8 +292,19 @@ export default function Taxes() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                    Aucune taxe configurée.
+                  <TableCell colSpan={5} className="text-center py-20">
+                    <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                      <div className="p-4 bg-muted rounded-full">
+                        <Percent size={32} />
+                      </div>
+                      <div className="space-y-1">
+                        <p className="font-bold text-foreground">Aucune taxe trouvée</p>
+                        <p className="text-sm">Configurez vos taux de TVA pour automatiser vos calculs.</p>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={() => setIsAddOpen(true)} className="mt-2">
+                        <Plus size={14} className="mr-2" /> Nouvelle Taxe
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               )}

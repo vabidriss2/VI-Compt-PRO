@@ -25,18 +25,6 @@ export const NotificationBell = () => {
   const [prevUnreadCount, setPrevUnreadCount] = useState(0);
 
   useEffect(() => {
-    if (unreadCount > prevUnreadCount) {
-      const playSound = () => {
-        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-        audio.volume = 0.5;
-        audio.play().catch(e => {
-          // Silent catch for browser autoplay policies
-          console.log('Autoplay blocked - sound will play after user interaction');
-        });
-      };
-      
-      playSound();
-    }
     setPrevUnreadCount(unreadCount);
   }, [unreadCount, prevUnreadCount]);
 

@@ -36,11 +36,12 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { Plus, Trash2, Edit2, ClipboardList } from 'lucide-react';
+import { Plus, Trash2, Edit2, ClipboardList, Search, BookOpen, ShoppingCart, CreditCard, Landmark, Wallet, FileText } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { handleFirestoreError, OperationType } from '../lib/error-handler';
 import { logAction } from '../lib/audit';
+import { cn } from '@/lib/utils';
 
 export default function Journals() {
   const { userData } = useAuth();
@@ -48,6 +49,7 @@ export default function Journals() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingJournal, setEditingJournal] = useState<any>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   const [newJournal, setNewJournal] = useState({
     code: '',
     name: '',
@@ -138,6 +140,22 @@ export default function Journals() {
     }
   };
 
+  const getTypeIcon = (type: string) => {
+    switch (type) {
+      case 'purchase': return <ShoppingCart size={16} className="text-orange-500" />;
+      case 'sale': return <CreditCard size={16} className="text-emerald-500" />;
+      case 'bank': return <Landmark size={16} className="text-blue-500" />;
+      case 'cash': return <Wallet size={16} className="text-amber-500" />;
+      case 'general': return <FileText size={16} className="text-slate-500" />;
+      default: return <BookOpen size={16} />;
+    }
+  };
+
+  const filteredJournals = journals.filter(j => 
+    j.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    j.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -205,49 +223,72 @@ export default function Journals() {
         </Dialog>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Liste des journaux</CardTitle>
-          <CardDescription>Tous les journaux configurés pour votre entreprise.</CardDescription>
+      <Card className="border-primary/10 shadow-sm">
+        <CardHeader className="pb-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <CardTitle>Liste des journaux</CardTitle>
+              <CardDescription>Tous les journaux configurés pour votre entreprise.</CardDescription>
+            </div>
+            <div className="relative w-full md:w-72">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input 
+                placeholder="Rechercher un journal..." 
+                className="pl-9 h-9"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Code</TableHead>
-                <TableHead>Nom</TableHead>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="w-[100px]">Code</TableHead>
+                <TableHead>Nom du Journal</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {journals.length > 0 ? (
-                journals.map((journal) => (
-                  <TableRow key={journal.id}>
-                    <TableCell className="font-bold">{journal.code}</TableCell>
-                    <TableCell>{journal.name}</TableCell>
+              {filteredJournals.length > 0 ? (
+                filteredJournals.map((journal) => (
+                  <TableRow key={journal.id} className="group hover:bg-muted/30 transition-colors">
                     <TableCell>
-                      <Badge variant="outline">{getTypeLabel(journal.type)}</Badge>
+                      <Badge variant="outline" className="font-mono font-bold border-primary/20 text-primary bg-primary/5">
+                        {journal.code}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-medium">{journal.name}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded-md bg-muted/50">
+                          {getTypeIcon(journal.type)}
+                        </div>
+                        <span className="text-sm font-medium">{getTypeLabel(journal.type)}</span>
+                      </div>
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <Button 
                           variant="ghost" 
                           size="icon"
+                          className="h-8 w-8"
                           onClick={() => {
                             setEditingJournal(journal);
                             setIsEditOpen(true);
                           }}
                         >
-                          <Edit2 size={16} />
+                          <Edit2 size={14} />
                         </Button>
                         <Button 
                           variant="ghost" 
                           size="icon" 
-                          className="text-destructive"
+                          className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                           onClick={() => handleDeleteJournal(journal.id)}
                         >
-                          <Trash2 size={16} />
+                          <Trash2 size={14} />
                         </Button>
                       </div>
                     </TableCell>
@@ -255,8 +296,19 @@ export default function Journals() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                    Aucun journal configuré.
+                  <TableCell colSpan={4} className="text-center py-20">
+                    <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                      <div className="p-4 bg-muted rounded-full">
+                        <BookOpen size={32} />
+                      </div>
+                      <div className="space-y-1">
+                        <p className="font-bold text-foreground">Aucun journal trouvé</p>
+                        <p className="text-sm">Commencez par créer un nouveau journal comptable.</p>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={() => setIsAddOpen(true)} className="mt-2">
+                        <Plus size={14} className="mr-2" /> Nouveau Journal
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               )}

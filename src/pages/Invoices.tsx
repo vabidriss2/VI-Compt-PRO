@@ -36,8 +36,32 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { Plus, Download, FileText, Search, Filter, Trash2, Printer, Send, RefreshCw } from 'lucide-react';
+import { 
+  Plus, 
+  Download, 
+  FileText, 
+  Search, 
+  Filter, 
+  Trash2, 
+  Printer, 
+  Send, 
+  RefreshCw,
+  CheckSquare,
+  Square,
+  Mail,
+  MoreVertical,
+  ChevronDown,
+  AlertCircle
+} from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuLabel, 
+  DropdownMenuSeparator, 
+  DropdownMenuTrigger 
+} from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { handleFirestoreError, OperationType } from '../lib/error-handler';
@@ -57,6 +81,9 @@ export default function Invoices() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterType, setFilterType] = useState('all');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
   const generateInvoiceNumber = (t: 'sale' | 'purchase') => {
@@ -300,11 +327,182 @@ export default function Invoices() {
     }
   };
 
+  const handleBulkMarkAsPaid = async () => {
+    if (selectedIds.length === 0) return;
+    if (!confirm(`Marquer ${selectedIds.length} factures comme payées ?`)) return;
+
+    setLoading(true);
+    try {
+      const batch = writeBatch(db);
+      selectedIds.forEach(id => {
+        const ref = doc(db, `companies/${userData!.companyId}/invoices`, id);
+        batch.update(ref, { status: 'paid', paidAt: new Date().toISOString() });
+      });
+      await batch.commit();
+      toast.success(`${selectedIds.length} factures marquées comme payées.`);
+      setSelectedIds([]);
+    } catch (error) {
+      toast.error("Erreur lors de l'action groupée.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBulkSendReminders = async () => {
+    if (selectedIds.length === 0) return;
+    setLoading(true);
+    try {
+      let count = 0;
+      for (const id of selectedIds) {
+        const inv = invoices.find(i => i.id === id);
+        if (inv && inv.status !== 'paid') {
+          await handleSendReminder(inv);
+          count++;
+        }
+      }
+      toast.success(`${count} relances envoyées.`);
+      setSelectedIds([]);
+    } catch (error) {
+      toast.error("Erreur lors de l'envoi des relances.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSendInvoice = async (invoice: any) => {
+    setLoading(true);
+    try {
+      const contact = contacts.find(c => c.id === invoice.contactId);
+      const title = `Votre facture ${invoice.number}`;
+      const message = `Bonjour ${contact?.name},\n\nVeuillez trouver ci-joint votre facture ${invoice.number} d'un montant de ${invoice.totalAmount.toLocaleString()} ${company?.currency}.\n\nCordialement,\n${company?.name}`;
+      
+      await sendEmailSimulation(
+        userData!.companyId,
+        contact?.email || 'client@example.com',
+        title,
+        message,
+        'invoice_send'
+      );
+
+      const invRef = doc(db, `companies/${userData!.companyId}/invoices`, invoice.id);
+      await updateDoc(invRef, { 
+        status: invoice.status === 'pending' ? 'sent' : invoice.status,
+        sentAt: new Date().toISOString() 
+      });
+
+      toast.success(`Facture ${invoice.number} envoyée avec succès !`);
+    } catch (error) {
+      toast.error("Erreur lors de l'envoi de la facture.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const generatePDF = (invoice: any) => {
+    const doc = new jsPDF();
+    const contact = contacts.find(c => c.id === invoice.contactId);
+
+    // Header & Logo Placeholder
+    doc.setFillColor(5, 150, 105); // Emerald 600
+    doc.rect(0, 0, 210, 40, 'F');
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(24);
+    doc.text(company?.name || 'VI Compt PRO', 14, 25);
+    
+    doc.setFontSize(10);
+    doc.text(company?.address || 'Adresse de l\'entreprise', 14, 32);
+    doc.text(`NIF: ${company?.taxId || 'N/A'}`, 14, 37);
+
+    // Invoice Info Box
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(16);
+    doc.text('FACTURE', 140, 55);
+    doc.setFontSize(10);
+    doc.text(`Numéro: ${invoice.number}`, 140, 62);
+    doc.text(`Date: ${format(new Date(invoice.date), 'dd/MM/yyyy')}`, 140, 67);
+    doc.text(`Échéance: ${format(new Date(invoice.dueDate), 'dd/MM/yyyy')}`, 140, 72);
+
+    // Client Info
+    doc.setFontSize(12);
+    doc.text('DESTINATAIRE', 14, 55);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(contact?.name || 'Client inconnu', 14, 62);
+    doc.setFont('helvetica', 'normal');
+    doc.text(contact?.address || 'Pas d\'adresse renseignée', 14, 67);
+    doc.text(contact?.phone || '', 14, 72);
+    doc.text(contact?.email || '', 14, 77);
+
+    // Table
+    const tableData = invoice.items.map((item: any) => [
+      item.description,
+      item.quantity,
+      `${item.price.toLocaleString()} ${company?.currency}`,
+      `${(item.quantity * item.price).toLocaleString()} ${company?.currency}`
+    ]);
+
+    autoTable(doc, {
+      startY: 90,
+      head: [['Description', 'Qté', 'Prix Unitaire', 'Total HT']],
+      body: tableData,
+      headStyles: { fillColor: [5, 150, 105] },
+      alternateRowStyles: { fillColor: [245, 245, 245] },
+    });
+
+    const finalY = (doc as any).lastAutoTable.finalY;
+    
+    // Totals
+    doc.setFontSize(10);
+    const totalX = 140;
+    doc.text(`Sous-total HT:`, totalX, finalY + 15);
+    doc.text(`${invoice.subtotal.toLocaleString()} ${company?.currency}`, 180, finalY + 15, { align: 'right' });
+    
+    doc.text(`TVA (${invoice.taxRate || 0}%):`, totalX, finalY + 22);
+    doc.text(`${invoice.taxAmount.toLocaleString()} ${company?.currency}`, 180, finalY + 22, { align: 'right' });
+    
+    doc.setDrawColor(5, 150, 105);
+    doc.setLineWidth(0.5);
+    doc.line(totalX, finalY + 26, 190, finalY + 26);
+    
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`TOTAL TTC:`, totalX, finalY + 35);
+    doc.text(`${invoice.totalAmount.toLocaleString()} ${company?.currency}`, 180, finalY + 35, { align: 'right' });
+
+    // Footer
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 100, 100);
+    doc.text('Merci de votre confiance.', 105, 285, { align: 'center' });
+    doc.text(`${company?.name} - Généré par VI Compt PRO`, 105, 290, { align: 'center' });
+
+    doc.save(`Facture_${invoice.number}.pdf`);
+  };
+
   const filteredInvoices = invoices.filter(inv => {
     const contact = contacts.find(c => c.id === inv.contactId);
-    return inv.number.toLowerCase().includes(searchTerm.toLowerCase()) || 
-           contact?.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = inv.number.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                         contact?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         inv.items.some((i: any) => i.description.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    const matchesStatus = filterStatus === 'all' || inv.status === filterStatus;
+    const matchesType = filterType === 'all' || inv.type === filterType;
+
+    return matchesSearch && matchesStatus && matchesType;
   });
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === filteredInvoices.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredInvoices.map(i => i.id));
+    }
+  };
 
   const resetForm = () => {
     setContactId('');
@@ -341,48 +539,6 @@ export default function Invoices() {
     }
   };
 
-  const generatePDF = (invoice: any) => {
-    const doc = new jsPDF();
-    const contact = contacts.find(c => c.id === invoice.contactId);
-
-    // Header
-    doc.setFontSize(20);
-    doc.text(company?.name || 'VI Compt PRO', 14, 22);
-    doc.setFontSize(10);
-    doc.text(`Facture N°: ${invoice.number}`, 14, 30);
-    doc.text(`Date: ${invoice.date}`, 14, 35);
-    doc.text(`Échéance: ${invoice.dueDate}`, 14, 40);
-
-    // Client Info
-    doc.setFontSize(12);
-    doc.text('Destinataire:', 14, 55);
-    doc.setFontSize(10);
-    doc.text(contact?.name || 'Client inconnu', 14, 60);
-    doc.text(contact?.address || '', 14, 65);
-    doc.text(contact?.email || '', 14, 70);
-
-    // Table
-    const tableData = invoice.items.map((item: any) => [
-      item.description,
-      item.quantity,
-      item.price.toLocaleString(),
-      (item.quantity * item.price).toLocaleString()
-    ]);
-
-    autoTable(doc, {
-      startY: 80,
-      head: [['Description', 'Qté', 'Prix Unitaire', 'Total']],
-      body: tableData,
-    });
-
-    const finalY = (doc as any).lastAutoTable.finalY;
-    doc.text(`Sous-total: ${invoice.subtotal.toLocaleString()} ${company?.currency}`, 140, finalY + 10);
-    doc.text(`Taxe (${invoice.taxRate || 0}%): ${invoice.taxAmount.toLocaleString()} ${company?.currency}`, 140, finalY + 15);
-    doc.setFontSize(12);
-    doc.text(`TOTAL: ${invoice.totalAmount.toLocaleString()} ${company?.currency}`, 140, finalY + 25);
-
-    doc.save(`Facture_${invoice.number}.pdf`);
-  };
 
   return (
     <div className="space-y-6">
@@ -556,19 +712,66 @@ export default function Invoices() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Liste des factures</CardTitle>
-            <div className="flex gap-2">
-              <div className="relative w-64">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <CardTitle>Liste des factures</CardTitle>
+              {selectedIds.length > 0 && (
+                <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2">
+                  <Badge variant="secondary" className="px-2 py-1">{selectedIds.length} sélectionnés</Badge>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger render={
+                      <Button variant="outline" size="sm" className="gap-2">
+                        Actions groupées <ChevronDown size={14} />
+                      </Button>
+                    } />
+                    <DropdownMenuContent align="start">
+                      <DropdownMenuItem onClick={handleBulkMarkAsPaid} className="gap-2">
+                        <CheckSquare size={14} className="text-emerald-500" /> Marquer comme payé
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={handleBulkSendReminders} className="gap-2">
+                        <Mail size={14} className="text-blue-500" /> Envoyer des relances
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem className="text-destructive gap-2">
+                        <Trash2 size={14} /> Supprimer
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <div className="relative w-full md:w-64">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input 
-                  placeholder="Rechercher..." 
+                  placeholder="Rechercher (N°, Contact, Article)..." 
                   className="pl-10" 
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
-              <Button variant="outline" size="icon"><Filter size={18} /></Button>
+              <Select value={filterType} onValueChange={setFilterType}>
+                <SelectTrigger className="w-[130px]">
+                  <SelectValue placeholder="Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous types</SelectItem>
+                  <SelectItem value="sale">Ventes</SelectItem>
+                  <SelectItem value="purchase">Achats</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger className="w-[130px]">
+                  <SelectValue placeholder="Statut" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous statuts</SelectItem>
+                  <SelectItem value="pending">En attente</SelectItem>
+                  <SelectItem value="sent">Envoyé</SelectItem>
+                  <SelectItem value="paid">Payé</SelectItem>
+                  <SelectItem value="overdue">En retard</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </CardHeader>
@@ -576,6 +779,20 @@ export default function Invoices() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8" 
+                    onClick={toggleSelectAll}
+                  >
+                    {selectedIds.length === filteredInvoices.length && filteredInvoices.length > 0 ? (
+                      <CheckSquare size={18} className="text-primary" />
+                    ) : (
+                      <Square size={18} className="text-muted-foreground" />
+                    )}
+                  </Button>
+                </TableHead>
                 <TableHead>Numéro</TableHead>
                 <TableHead>Contact</TableHead>
                 <TableHead>Date</TableHead>
@@ -589,9 +806,31 @@ export default function Invoices() {
               {filteredInvoices.length > 0 ? (
                 filteredInvoices.map((inv) => {
                   const contact = contacts.find(c => c.id === inv.contactId);
+                  const isSelected = selectedIds.includes(inv.id);
+                  const isOverdue = new Date(inv.dueDate) < new Date() && inv.status !== 'paid';
+
                   return (
-                    <TableRow key={inv.id} className="group">
-                      <TableCell className="font-medium">{inv.number}</TableCell>
+                    <TableRow key={inv.id} className={cn("group transition-colors", isSelected && "bg-muted/50")}>
+                      <TableCell>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8" 
+                          onClick={() => toggleSelect(inv.id)}
+                        >
+                          {isSelected ? (
+                            <CheckSquare size={18} className="text-primary" />
+                          ) : (
+                            <Square size={18} className="text-muted-foreground" />
+                          )}
+                        </Button>
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          {inv.number}
+                          {isOverdue && <AlertCircle size={14} className="text-rose-500" />}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <div className="flex flex-col">
                           <span className="font-medium">{contact?.name || 'Inconnu'}</span>
@@ -599,7 +838,9 @@ export default function Invoices() {
                         </div>
                       </TableCell>
                       <TableCell>{format(new Date(inv.date), 'dd/MM/yyyy')}</TableCell>
-                      <TableCell>{format(new Date(inv.dueDate), 'dd/MM/yyyy')}</TableCell>
+                      <TableCell className={cn(isOverdue && "text-rose-600 font-medium")}>
+                        {format(new Date(inv.dueDate), 'dd/MM/yyyy')}
+                      </TableCell>
                       <TableCell className="text-right font-bold">
                         {inv.totalAmount.toLocaleString()} {company?.currency}
                       </TableCell>
@@ -608,18 +849,34 @@ export default function Invoices() {
                           <Badge variant={inv.type === 'sale' ? 'default' : 'outline'} className={cn("w-fit text-[10px] uppercase", inv.type === 'sale' ? "bg-blue-500 hover:bg-blue-600" : "border-amber-500 text-amber-600")}>
                             {inv.type === 'sale' ? 'Vente' : 'Achat'}
                           </Badge>
-                          <Badge variant={inv.status === 'paid' ? 'secondary' : 'outline'} className={cn("w-fit text-[10px] uppercase", inv.status === 'paid' ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-rose-50 text-rose-600 border-rose-100")}>
-                            {inv.status === 'paid' ? 'Payé' : 'En attente'}
+                          <Badge variant={inv.status === 'paid' ? 'secondary' : 'outline'} className={cn(
+                            "w-fit text-[10px] uppercase", 
+                            inv.status === 'paid' ? "bg-emerald-100 text-emerald-700 border-emerald-200" : 
+                            inv.status === 'sent' ? "bg-blue-50 text-blue-600 border-blue-100" :
+                            isOverdue ? "bg-rose-50 text-rose-600 border-rose-100" :
+                            "bg-slate-50 text-slate-600 border-slate-100"
+                          )}>
+                            {inv.status === 'paid' ? 'Payé' : inv.status === 'sent' ? 'Envoyé' : isOverdue ? 'En retard' : 'En attente'}
                           </Badge>
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <Button 
                             variant="ghost" 
                             size="icon" 
                             className="h-8 w-8"
-                            title="Envoyer une relance par email"
+                            title="Envoyer la facture par email"
+                            onClick={() => handleSendInvoice(inv)}
+                            disabled={inv.status === 'paid'}
+                          >
+                            <Mail size={14} className="text-primary" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8"
+                            title="Envoyer une relance"
                             onClick={() => handleSendReminder(inv)}
                             disabled={inv.status === 'paid'}
                           >

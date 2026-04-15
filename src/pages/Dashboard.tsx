@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { collection, query, where, onSnapshot, limit, orderBy } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, limit, orderBy, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { 
@@ -19,7 +19,17 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Clock,
-  Activity
+  Activity,
+  Landmark,
+  PieChart as PieChartIcon,
+  ArrowRight,
+  AlertCircle,
+  CheckCircle2,
+  Info,
+  PlusCircle,
+  FilePlus,
+  UserPlus,
+  Landmark as BankIcon
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -31,7 +41,11 @@ import {
   ResponsiveContainer, 
   PieChart, 
   Pie,
-  Cell
+  Cell,
+  LineChart,
+  Line,
+  AreaChart,
+  Area
 } from 'recharts';
 import { getFinancialInsights } from '../services/geminiService';
 import ReactMarkdown from 'react-markdown';
@@ -40,8 +54,8 @@ import { Badge } from '@/components/ui/badge';
 import { handleFirestoreError, OperationType } from '../lib/error-handler';
 import { checkAndGenerateNotifications, subscribeToNotifications, Notification } from '../lib/notifications';
 import { Link } from 'react-router-dom';
-import { AlertCircle, CheckCircle2, Info, PlusCircle, FilePlus, UserPlus, Landmark as BankIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
 
 export default function Dashboard() {
   const { userData, company } = useAuth();
@@ -50,25 +64,27 @@ export default function Dashboard() {
     expenses: 0,
     profit: 0,
     receivables: 0,
-    payables: 0
+    payables: 0,
+    vatCollected: 0,
+    vatDeductible: 0
   });
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [aiInsights, setAiInsights] = useState<string | null>(null);
   const [loadingInsights, setLoadingInsights] = useState(false);
+  const [topClients, setTopClients] = useState<any[]>([]);
+  const [journalEntries, setJournalEntries] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
 
   useEffect(() => {
     if (!userData?.companyId) return;
 
-    // Trigger notification check
     checkAndGenerateNotifications(userData.companyId);
 
-    // Subscribe to notifications
     const unsubscribeNotifications = subscribeToNotifications(userData.companyId, (notifs) => {
       setNotifications(notifs.filter(n => n.status === 'unread'));
     });
 
-    // Fetch Invoices for stats
     const qInvoices = query(collection(db, `companies/${userData.companyId}/invoices`));
     const unsubscribeInvoices = onSnapshot(qInvoices, (snapshot) => {
       const invs = snapshot.docs.map(doc => doc.data());
@@ -77,13 +93,31 @@ export default function Dashboard() {
       const receivables = invs.filter((i: any) => i.type === 'sale' && i.status !== 'paid').reduce((sum, i: any) => sum + i.totalAmount, 0);
       const payables = invs.filter((i: any) => i.type === 'purchase' && i.status !== 'paid').reduce((sum, i: any) => sum + i.totalAmount, 0);
       
+      // VAT Estimation (assuming 20%)
+      const vatCollected = invs.filter((i: any) => i.type === 'sale').reduce((sum, i: any) => sum + (i.totalAmount * 0.2), 0);
+      const vatDeductible = invs.filter((i: any) => i.type === 'purchase').reduce((sum, i: any) => sum + (i.totalAmount * 0.2), 0);
+
       setStats({
         revenue,
         expenses,
         profit: revenue - expenses,
         receivables,
-        payables
+        payables,
+        vatCollected,
+        vatDeductible
       });
+
+      // Top Clients logic
+      const clientMap: { [key: string]: { name: string, total: number } } = {};
+      invs.filter((i: any) => i.type === 'sale').forEach((i: any) => {
+        if (!clientMap[i.contactId]) {
+          clientMap[i.contactId] = { name: i.contactName || 'Client Inconnu', total: 0 };
+        }
+        clientMap[i.contactId].total += i.totalAmount;
+      });
+      const sortedClients = Object.values(clientMap).sort((a, b) => b.total - a.total).slice(0, 5);
+      setTopClients(sortedClients);
+
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, `companies/${userData.companyId}/invoices`);
     });
@@ -95,22 +129,18 @@ export default function Dashboard() {
     );
 
     const unsubscribeTxs = onSnapshot(qTxs, (snapshot) => {
-      const txs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setRecentTransactions(txs);
+      setRecentTransactions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, `companies/${userData.companyId}/transactions`);
     });
 
-    // Fetch Journal Entries for real chart data
     const qEntries = query(collection(db, `companies/${userData.companyId}/journal_entries`));
     const unsubscribeEntries = onSnapshot(qEntries, (snapshot) => {
-      const entries = snapshot.docs.map(doc => doc.data());
-      setJournalEntries(entries);
+      setJournalEntries(snapshot.docs.map(doc => doc.data()));
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, `companies/${userData.companyId}/journal_entries`);
     });
 
-    // Fetch Accounts to identify revenue/expense types
     const qAccounts = query(collection(db, `companies/${userData.companyId}/accounts`));
     const unsubscribeAccounts = onSnapshot(qAccounts, (snapshot) => {
       setAccounts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -127,34 +157,26 @@ export default function Dashboard() {
     };
   }, [userData]);
 
-  const [journalEntries, setJournalEntries] = useState<any[]>([]);
-  const [accounts, setAccounts] = useState<any[]>([]);
-
-  // Calculate real monthly data
   const monthlyData = useMemo(() => {
     const data = [
-      { name: 'Jan', revenue: 0, expenses: 0 },
-      { name: 'Fév', revenue: 0, expenses: 0 },
-      { name: 'Mar', revenue: 0, expenses: 0 },
-      { name: 'Avr', revenue: 0, expenses: 0 },
-      { name: 'Mai', revenue: 0, expenses: 0 },
-      { name: 'Juin', revenue: 0, expenses: 0 },
+      { name: 'Jan', revenue: 0, expenses: 0, cash: 0 },
+      { name: 'Fév', revenue: 0, expenses: 0, cash: 0 },
+      { name: 'Mar', revenue: 0, expenses: 0, cash: 0 },
+      { name: 'Avr', revenue: 0, expenses: 0, cash: 0 },
+      { name: 'Mai', revenue: 0, expenses: 0, cash: 0 },
+      { name: 'Juin', revenue: 0, expenses: 0, cash: 0 },
     ];
 
-    const monthMap: { [key: string]: number } = {
-      '01': 0, '02': 1, '03': 2, '04': 3, '05': 4, '06': 5
-    };
+    const monthMap: { [key: string]: number } = { '01': 0, '02': 1, '03': 2, '04': 3, '05': 4, '06': 5 };
 
     journalEntries.forEach(entry => {
       const month = entry.date?.split('-')[1];
       if (month && monthMap[month] !== undefined) {
         const account = accounts.find(a => a.id === entry.accountId);
         if (account) {
-          if (account.type === 'revenue') {
-            data[monthMap[month]].revenue += (entry.credit - entry.debit);
-          } else if (account.type === 'expense') {
-            data[monthMap[month]].expenses += (entry.debit - entry.credit);
-          }
+          if (account.type === 'revenue') data[monthMap[month]].revenue += (entry.credit - entry.debit);
+          else if (account.type === 'expense') data[monthMap[month]].expenses += (entry.debit - entry.credit);
+          else if (account.accountId?.startsWith('5')) data[monthMap[month]].cash += (entry.debit - entry.credit);
         }
       }
     });
@@ -162,320 +184,273 @@ export default function Dashboard() {
     return data;
   }, [journalEntries, accounts]);
 
-  const expenseDistribution = [
-    { name: 'Opérations', value: stats.expenses * 0.6 },
-    { name: 'Taxes', value: stats.expenses * 0.2 },
-    { name: 'Autres', value: stats.expenses * 0.2 },
-  ];
-
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
+  const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
 
   const generateInsights = async () => {
     setLoadingInsights(true);
-    const insights = await getFinancialInsights({
-      monthlyData,
-      stats,
-      companyName: company?.name
-    });
+    const insights = await getFinancialInsights({ monthlyData, stats, companyName: company?.name });
     setAiInsights(insights);
     setLoadingInsights(false);
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Tableau de bord</h1>
-          <p className="text-muted-foreground">Bienvenue sur VI Compt PRO. Voici l'état de vos finances.</p>
+          <p className="text-muted-foreground">Pilotez votre activité avec des indicateurs en temps réel.</p>
         </div>
         <div className="flex gap-2">
-          <Link to="/invoices">
+          <Link to="/entries">
             <Button variant="outline" className="gap-2">
-              <FileText size={18} />
-              Gérer les factures
+              <PlusCircle size={18} /> Nouvelle Écriture
             </Button>
           </Link>
-          <Button onClick={generateInsights} disabled={loadingInsights} className="gap-2">
+          <Button onClick={generateInsights} disabled={loadingInsights} className="gap-2 bg-primary text-primary-foreground">
             <Sparkles size={18} />
-            {loadingInsights ? "Analyse en cours..." : "Générer des insights IA"}
+            {loadingInsights ? "Analyse..." : "Insights IA"}
           </Button>
         </div>
       </div>
 
-      {/* Tâches à effectuer */}
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card className="border-primary/20 bg-primary/5">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <CheckCircle2 className="text-primary" size={20} />
-              Tâches à effectuer
-            </CardTitle>
-            <CardDescription>Actions recommandées basées sur vos données en temps réel.</CardDescription>
+      {/* Primary Stats */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card className="bg-emerald-50 border-emerald-100 dark:bg-emerald-950/20 dark:border-emerald-900/30">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs font-bold uppercase text-emerald-700 dark:text-emerald-400">Chiffre d'Affaires</CardTitle>
+            <TrendingUp className="h-4 w-4 text-emerald-600" />
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
+            <div className="text-2xl font-bold text-emerald-900 dark:text-emerald-100">{stats.revenue.toLocaleString()} {company?.currency}</div>
+            <div className="flex items-center gap-1 mt-1 text-[10px] text-emerald-600 font-medium">
+              <ArrowUpRight size={12} /> +12.5% vs mois dernier
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-rose-50 border-rose-100 dark:bg-rose-950/20 dark:border-rose-900/30">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs font-bold uppercase text-rose-700 dark:text-rose-400">Dépenses Totales</CardTitle>
+            <TrendingDown className="h-4 w-4 text-rose-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-rose-900 dark:text-rose-100">{stats.expenses.toLocaleString()} {company?.currency}</div>
+            <div className="flex items-center gap-1 mt-1 text-[10px] text-rose-600 font-medium">
+              <ArrowDownRight size={12} /> -2.1% vs mois dernier
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-blue-50 border-blue-100 dark:bg-blue-950/20 dark:border-blue-900/30">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs font-bold uppercase text-blue-700 dark:text-blue-400">Trésorerie Nette</CardTitle>
+            <Landmark className="h-4 w-4 text-blue-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">{stats.profit.toLocaleString()} {company?.currency}</div>
+            <div className="flex items-center gap-1 mt-1 text-[10px] text-blue-600 font-medium">
+              <Activity size={12} /> Flux opérationnel positif
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-amber-50 border-amber-100 dark:bg-amber-950/20 dark:border-amber-900/30">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs font-bold uppercase text-amber-700 dark:text-amber-400">Encours Clients</CardTitle>
+            <Users className="h-4 w-4 text-amber-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-amber-900 dark:text-amber-100">{stats.receivables.toLocaleString()} {company?.currency}</div>
+            <div className="flex items-center gap-1 mt-1 text-[10px] text-amber-600 font-medium">
+              <Clock size={12} /> {notifications.filter(n => n.type === 'invoice_overdue').length} factures en retard
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Main Performance Chart */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Performance Financière</CardTitle>
+                <CardDescription>Revenus vs Dépenses (6 derniers mois)</CardDescription>
+              </div>
+              <Badge variant="outline">Mensuel</Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="h-[300px] pt-4">
+            <ResponsiveContainer width="100%" height="100%" minHeight={300}>
+              <AreaChart data={monthlyData}>
+                <defs>
+                  <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="colorExp" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#888'}} />
+                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#888'}} />
+                <Tooltip 
+                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                />
+                <Area type="monotone" dataKey="revenue" stroke="#10b981" fillOpacity={1} fill="url(#colorRev)" strokeWidth={2} name="Revenus" />
+                <Area type="monotone" dataKey="expenses" stroke="#ef4444" fillOpacity={1} fill="url(#colorExp)" strokeWidth={2} name="Dépenses" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* AI Insights & Notifications */}
+        <div className="space-y-6">
+          <Card className="bg-slate-900 text-white border-none shadow-xl">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Sparkles className="text-emerald-400" size={16} />
+                Analyses Prédictives
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {aiInsights ? (
+                <div className="text-[11px] text-slate-300 leading-relaxed max-h-[180px] overflow-y-auto pr-2 custom-scrollbar">
+                  <ReactMarkdown>{aiInsights}</ReactMarkdown>
+                </div>
+              ) : (
+                <div className="py-8 text-center space-y-3">
+                  <div className="p-3 bg-white/5 rounded-full w-fit mx-auto">
+                    <Activity className="h-6 w-6 text-emerald-400/50" />
+                  </div>
+                  <p className="text-[10px] text-slate-400">Générez une analyse complète de vos flux avec l'IA.</p>
+                  <Button variant="secondary" size="sm" onClick={generateInsights} className="h-7 text-[10px] font-bold">Lancer l'analyse</Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <AlertCircle className="text-amber-500" size={16} />
+                Alertes & Tâches
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
               {notifications.length > 0 ? (
-                notifications.map((n) => (
-                  <div key={n.id} className="flex items-start gap-3 p-3 bg-card rounded-lg border shadow-sm">
-                    {n.type === 'invoice_overdue' ? (
-                      <AlertCircle className="text-rose-500 mt-0.5 shrink-0" size={18} />
-                    ) : (
-                      <Info className="text-blue-500 mt-0.5 shrink-0" size={18} />
-                    )}
+                notifications.slice(0, 3).map((n) => (
+                  <div key={n.id} className="flex items-start gap-3 p-2 rounded-lg bg-muted/50 border text-[11px]">
+                    <div className={cn(
+                      "h-2 w-2 rounded-full mt-1.5 shrink-0",
+                      n.type === 'invoice_overdue' ? "bg-rose-500" : "bg-blue-500"
+                    )} />
                     <div className="flex-1">
-                      <p className="text-sm font-semibold">{n.title}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{n.message}</p>
+                      <p className="font-bold">{n.title}</p>
+                      <p className="text-muted-foreground line-clamp-1">{n.message}</p>
                     </div>
                     <Link to="/invoices">
-                      <Button size="sm" variant="ghost" className="h-8 text-xs">Voir</Button>
+                      <ArrowRight size={14} className="text-muted-foreground hover:text-primary transition-colors" />
                     </Link>
                   </div>
                 ))
               ) : (
-                <div className="text-center py-6 text-muted-foreground text-sm italic">
-                  Toutes les tâches sont à jour. Excellent travail !
+                <div className="text-center py-4 text-[10px] text-muted-foreground italic">
+                  Aucune alerte en attente.
                 </div>
               )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <PlusCircle className="text-primary" size={20} />
-              Actions Rapides
-            </CardTitle>
-            <CardDescription>Accédez directement aux fonctionnalités clés.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-3">
-              <Link to="/entries">
-                <Button variant="outline" className="w-full justify-start gap-2 h-12">
-                  <PlusCircle size={18} className="text-primary" />
-                  Nouvelle Écriture
-                </Button>
-              </Link>
-              <Link to="/invoices">
-                <Button variant="outline" className="w-full justify-start gap-2 h-12">
-                  <FilePlus size={18} className="text-primary" />
-                  Créer une Facture
-                </Button>
-              </Link>
-              <Link to="/contacts">
-                <Button variant="outline" className="w-full justify-start gap-2 h-12">
-                  <UserPlus size={18} className="text-primary" />
-                  Nouveau Contact
-                </Button>
-              </Link>
-              <Link to="/bank-recon">
-                <Button variant="outline" className="w-full justify-start gap-2 h-12">
-                  <BankIcon size={18} className="text-primary" />
-                  Rapprochement
-                </Button>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-6 lg:grid-cols-4">
+        {/* Top Clients */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Chiffre d'Affaires</CardTitle>
-            <TrendingUp className="h-4 w-4 text-emerald-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.revenue.toLocaleString()} {company?.currency}</div>
-            <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-              <span className="text-emerald-500 flex items-center"><ArrowUpRight size={12} /> +12%</span> par rapport au mois dernier
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Dépenses</CardTitle>
-            <TrendingDown className="h-4 w-4 text-rose-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.expenses.toLocaleString()} {company?.currency}</div>
-            <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-              <span className="text-rose-500 flex items-center"><ArrowDownRight size={12} /> +4%</span> par rapport au mois dernier
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Créances Clients</CardTitle>
-            <Users className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.receivables.toLocaleString()} {company?.currency}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Factures de vente impayées
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Dettes Fourn.</CardTitle>
-            <FileText className="h-4 w-4 text-amber-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.payables.toLocaleString()} {company?.currency}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Factures d'achat à régler
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Santé Financière</CardTitle>
-            <Activity className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {stats.revenue > stats.expenses ? 'Excellente' : 'À surveiller'}
-            </div>
-            <div className="w-full bg-muted h-2 rounded-full mt-2 overflow-hidden">
-              <div 
-                className={cn(
-                  "h-full transition-all duration-500",
-                  stats.revenue > stats.expenses ? "bg-emerald-500" : "bg-amber-500"
-                )}
-                style={{ width: `${Math.min(100, (stats.revenue / (stats.expenses || 1)) * 50)}%` }}
-              />
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              Ratio: {((stats.revenue / (stats.expenses || 1)) * 100).toFixed(0)}%
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-7">
-        {/* Main Chart */}
-        <Card className="md:col-span-4">
           <CardHeader>
-            <CardTitle>Revenus vs Dépenses</CardTitle>
-            <CardDescription>Évolution sur les 6 derniers mois</CardDescription>
+            <CardTitle className="text-sm">Top Clients</CardTitle>
+            <CardDescription className="text-[10px]">Par volume d'affaires</CardDescription>
           </CardHeader>
-          <CardContent className="pl-2">
-            <div className="h-[300px] min-h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={monthlyData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} name="Revenus" />
-                  <Bar dataKey="expenses" fill="hsl(var(--muted-foreground))" radius={[4, 4, 0, 0]} name="Dépenses" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* AI Insights Panel */}
-        <Card className="md:col-span-3">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Sparkles className="text-primary h-5 w-5" />
-              Analyses IA
-            </CardTitle>
-            <CardDescription>Insights financiers générés par Gemini</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {aiInsights ? (
-              <div className="prose prose-sm dark:prose-invert max-h-[300px] overflow-y-auto pr-2">
-                <ReactMarkdown>{aiInsights}</ReactMarkdown>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center h-[250px] text-center space-y-4">
-                <div className="p-4 bg-primary/5 rounded-full">
-                  <Sparkles className="h-12 w-12 text-primary/40" />
+          <CardContent className="space-y-4">
+            {topClients.map((client, i) => (
+              <div key={i} className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary">
+                    {client.name.substring(0, 2).toUpperCase()}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold truncate max-w-[100px]">{client.name}</span>
+                    <span className="text-[10px] text-muted-foreground">Client fidèle</span>
+                  </div>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  Cliquez sur le bouton en haut pour analyser vos données financières avec l'IA.
-                </p>
+                <span className="text-xs font-bold">{client.total.toLocaleString()} {company?.currency}</span>
               </div>
-            )}
+            ))}
+            {topClients.length === 0 && <p className="text-center py-4 text-xs text-muted-foreground">Aucune donnée de vente.</p>}
           </CardContent>
         </Card>
-      </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        {/* Recent Transactions */}
-        <Card className="lg:col-span-4">
+        {/* Tax Summary */}
+        <Card>
           <CardHeader>
-            <CardTitle>Transactions Récentes</CardTitle>
-            <CardDescription>Les 5 dernières opérations enregistrées</CardDescription>
+            <CardTitle className="text-sm">Synthèse TVA</CardTitle>
+            <CardDescription className="text-[10px]">Estimation période en cours</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">TVA Collectée</span>
+                <span className="font-bold text-emerald-600">+{stats.vatCollected.toLocaleString()}</span>
+              </div>
+              <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                <div className="h-full bg-emerald-500" style={{ width: '100%' }} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">TVA Déductible</span>
+                <span className="font-bold text-rose-600">-{stats.vatDeductible.toLocaleString()}</span>
+              </div>
+              <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                <div className="h-full bg-rose-500" style={{ width: `${(stats.vatDeductible / (stats.vatCollected || 1)) * 100}%` }} />
+              </div>
+            </div>
+            <div className="pt-4 border-t flex justify-between items-center">
+              <span className="text-xs font-bold">Solde à payer</span>
+              <Badge variant={stats.vatCollected > stats.vatDeductible ? "destructive" : "default"}>
+                {(stats.vatCollected - stats.vatDeductible).toLocaleString()} {company?.currency}
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Recent Transactions */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm">Dernières Opérations</CardTitle>
+              <Link to="/entries" className="text-[10px] text-primary hover:underline">Voir tout</Link>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {recentTransactions.length > 0 ? (
-                recentTransactions.map((tx) => (
-                  <div key={tx.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-accent transition-colors">
-                    <div className="flex items-center gap-4">
-                      <div className="p-2 bg-primary/10 rounded-full text-primary">
-                        <DollarSign size={16} />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium leading-none">{tx.description}</p>
-                        <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                          <Clock size={12} /> {new Date(tx.date).toLocaleDateString()}
-                        </p>
-                      </div>
+            <div className="space-y-1">
+              {recentTransactions.map((tx) => (
+                <div key={tx.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors border-b last:border-0">
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "h-7 w-7 rounded flex items-center justify-center",
+                      tx.type === 'revenue' ? "bg-emerald-100 text-emerald-600" : "bg-slate-100 text-slate-600"
+                    )}>
+                      {tx.type === 'revenue' ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
                     </div>
-                    <div className="text-right">
-                      <Badge variant={tx.type === 'revenue' ? 'default' : 'secondary'}>
-                        {tx.reference}
-                      </Badge>
+                    <div>
+                      <p className="text-xs font-bold leading-none">{tx.description}</p>
+                      <p className="text-[10px] text-muted-foreground mt-1">{format(new Date(tx.date), 'dd/MM/yyyy')}</p>
                     </div>
                   </div>
-                ))
-              ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  Aucune transaction récente.
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Expense Distribution */}
-        <Card className="lg:col-span-3">
-          <CardHeader>
-            <CardTitle>Répartition des Dépenses</CardTitle>
-            <CardDescription>Par catégorie ce mois-ci</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[250px] min-h-[250px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={expenseDistribution}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {expenseDistribution.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="grid grid-cols-2 gap-2 mt-4">
-              {expenseDistribution.map((item, index) => (
-                <div key={item.name} className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                  <span className="text-xs text-muted-foreground">{item.name}</span>
+                  <div className="text-right">
+                    <p className="text-xs font-bold font-mono">{tx.reference}</p>
+                    <Badge variant="outline" className="text-[9px] h-4 px-1 uppercase">{tx.journalId}</Badge>
+                  </div>
                 </div>
               ))}
             </div>

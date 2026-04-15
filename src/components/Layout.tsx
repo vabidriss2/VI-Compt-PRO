@@ -43,9 +43,10 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { NotificationBell } from './NotificationBell';
 
-const SidebarItem = ({ icon: Icon, label, to, active, collapsed }: any) => (
+const SidebarItem = ({ icon: Icon, label, to, active, collapsed, onClick }: any) => (
   <Link
     to={to}
+    onClick={onClick}
     className={cn(
       "flex items-center gap-3 px-3 py-2 rounded-lg transition-colors mb-1",
       active 
@@ -59,8 +60,8 @@ const SidebarItem = ({ icon: Icon, label, to, active, collapsed }: any) => (
   </Link>
 );
 
-const SidebarGroup = ({ label, items, collapsed, pathname }: any) => {
-  const [isOpen, setIsOpen] = useState(true);
+const SidebarGroup = ({ label, items, collapsed, pathname, onItemClick, defaultOpen = true }: any) => {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
   const hasActive = items.some((item: any) => pathname === item.to);
 
   if (collapsed) {
@@ -72,6 +73,7 @@ const SidebarGroup = ({ label, items, collapsed, pathname }: any) => {
             {...item}
             active={pathname === item.to}
             collapsed={collapsed}
+            onClick={onItemClick}
           />
         ))}
       </div>
@@ -95,6 +97,7 @@ const SidebarGroup = ({ label, items, collapsed, pathname }: any) => {
               {...item}
               active={pathname === item.to}
               collapsed={collapsed}
+              onClick={onItemClick}
             />
           ))}
         </div>
@@ -203,9 +206,14 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       >
         <div className="p-4 flex items-center justify-between border-b h-16">
           {!collapsed && (
-            <div className="flex items-center gap-2 font-bold text-xl text-primary truncate">
-              <Building2 size={24} className="shrink-0" />
-              <span className="truncate">VI Compt PRO</span>
+            <div className="flex items-center gap-2 font-bold text-xl tracking-tight text-primary truncate">
+              <div className="bg-primary text-primary-foreground p-1.5 rounded-lg shadow-sm">
+                <Building2 size={20} className="shrink-0" />
+              </div>
+              <div className="flex flex-col leading-none">
+                <span className="truncate">VI Compt</span>
+                <span className="text-[10px] text-emerald-500 font-black uppercase tracking-widest">PRO</span>
+              </div>
             </div>
           )}
           <Button variant="ghost" size="icon" onClick={() => setCollapsed(!collapsed)} className="shrink-0">
@@ -213,7 +221,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           </Button>
         </div>
 
-        <ScrollArea className="flex-1 px-3 py-4">
+        <ScrollArea className="flex-1 px-3 py-4 [mask-image:linear-gradient(to_bottom,transparent,black_20px,black_calc(100%-20px),transparent)]">
           {menuGroups.map((group) => (
             <SidebarGroup
               key={group.label}
@@ -245,42 +253,47 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         >
           <div className="fixed inset-y-0 left-0 w-64 bg-card shadow-lg flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-6 border-b">
-              <div className="flex items-center gap-2 font-bold text-xl text-primary">
-                <Building2 size={24} />
-                <span>VI Compt PRO</span>
+              <div className="flex items-center gap-2 font-bold text-xl tracking-tight text-primary">
+                <div className="bg-primary text-primary-foreground p-1.5 rounded-lg">
+                  <Building2 size={20} />
+                </div>
+                <div className="flex flex-col leading-none">
+                  <span>VI Compt</span>
+                  <span className="text-[10px] text-emerald-500 font-black uppercase tracking-widest">PRO</span>
+                </div>
               </div>
               <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(false)}>
                 <X size={20} />
               </Button>
             </div>
-            <ScrollArea className="flex-1 p-6">
-              <nav className="space-y-6">
-                {menuGroups.map((group) => (
-                  <div key={group.label}>
-                    <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                      {group.label}
-                    </p>
-                    <div className="space-y-1">
-                      {group.items.map((item) => (
-                        <Link
-                          key={item.to}
-                          to={item.to}
-                          onClick={() => setMobileMenuOpen(false)}
-                          className={cn(
-                            "flex items-center gap-3 px-3 py-2 rounded-lg transition-colors",
-                            location.pathname === item.to 
-                              ? "bg-primary text-primary-foreground" 
-                              : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                          )}
-                        >
-                          <item.icon size={18} />
-                          <span className="text-sm font-medium">{item.label}</span>
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
+            <ScrollArea className="flex-1 p-4">
+              <nav className="space-y-2">
+                {menuGroups.map((group, index) => (
+                  <SidebarGroup
+                    key={group.label}
+                    label={group.label}
+                    items={group.items}
+                    collapsed={false}
+                    pathname={location.pathname}
+                    onItemClick={() => setMobileMenuOpen(false)}
+                    defaultOpen={index === 0 || group.items.some((item: any) => location.pathname === item.to)}
+                  />
                 ))}
               </nav>
+              
+              <div className="mt-8 pt-6 border-t">
+                <Button 
+                  variant="ghost" 
+                  className="w-full justify-start gap-3 text-destructive hover:text-destructive hover:bg-destructive/10"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    handleLogout();
+                  }}
+                >
+                  <LogOut size={20} />
+                  <span>Déconnexion</span>
+                </Button>
+              </div>
             </ScrollArea>
           </div>
         </div>
@@ -294,6 +307,12 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileMenuOpen(true)}>
               <Menu size={20} />
             </Button>
+            <div className="md:hidden flex items-center gap-2 font-bold text-lg tracking-tight text-primary">
+              <div className="bg-primary text-primary-foreground p-1 rounded-md">
+                <Building2 size={16} />
+              </div>
+              <span>VI Compt <span className="text-emerald-500 text-[10px]">PRO</span></span>
+            </div>
             <div className="hidden md:block">
               <h2 className="text-sm font-medium text-muted-foreground">
                 {company?.name || 'Chargement...'}

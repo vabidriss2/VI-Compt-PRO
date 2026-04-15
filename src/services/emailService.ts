@@ -5,7 +5,7 @@ export interface EmailLog {
   to: string;
   subject: string;
   body: string;
-  type: 'invoice_reminder' | 'payment_confirmation' | 'system';
+  type: 'invoice_reminder' | 'payment_confirmation' | 'system' | 'invoice_send';
   status: 'sent' | 'failed';
   createdAt: any;
   companyId: string;

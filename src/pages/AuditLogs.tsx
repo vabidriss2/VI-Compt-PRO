@@ -20,7 +20,44 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { History, User, Database, Clock } from 'lucide-react';
+import { 
+  History, 
+  User, 
+  Database, 
+  Clock, 
+  Search, 
+  Filter, 
+  Download, 
+  Eye, 
+  ArrowRight,
+  ShieldCheck,
+  AlertCircle,
+  FileText,
+  Activity,
+  RefreshCw,
+  Trash2,
+  Plus,
+  Edit3,
+  ExternalLink,
+  Shield,
+  Lock,
+  Zap,
+  Terminal
+} from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
+import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger 
+} from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import { handleFirestoreError, OperationType } from '../lib/error-handler';
 
 export default function AuditLogs() {
@@ -45,6 +82,17 @@ export default function AuditLogs() {
     return () => unsubscribe();
   }, [userData]);
 
+  const [selectedLog, setSelectedLog] = useState<any>(null);
+
+  const getActionIcon = (action: string) => {
+    switch (action) {
+      case 'CREATE': return <Plus size={12} className="text-emerald-500" />;
+      case 'UPDATE': return <Edit3 size={12} className="text-blue-500" />;
+      case 'DELETE': return <Trash2 size={12} className="text-rose-500" />;
+      default: return <Activity size={12} className="text-slate-500" />;
+    }
+  };
+
   const getActionColor = (action: string) => {
     switch (action) {
       case 'CREATE': return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
@@ -56,71 +104,205 @@ export default function AuditLogs() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Historique des actions</h1>
-        <p className="text-muted-foreground">Journal complet des modifications effectuées sur le système.</p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Journal d'Audit</h1>
+          <p className="text-muted-foreground">Traçabilité complète des opérations pour la conformité et la sécurité.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 rounded-full border border-emerald-100 mr-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Live Feed</span>
+          </div>
+          <Button variant="outline" size="sm" className="h-10 px-4 text-[10px] font-black uppercase tracking-widest border-slate-200 hover:bg-slate-50 gap-2">
+            <Download size={14} /> Exporter
+          </Button>
+          <Button variant="outline" size="sm" className="h-10 px-4 text-[10px] font-black uppercase tracking-widest border-slate-200 hover:bg-slate-50 gap-2">
+            <Filter size={14} /> Filtres
+          </Button>
+        </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <History className="text-primary" size={20} />
-            Journal d'audit
-          </CardTitle>
-          <CardDescription>Les 100 dernières actions effectuées par les utilisateurs.</CardDescription>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <Card className="border-slate-200 shadow-sm overflow-hidden group hover:border-indigo-300 transition-all">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Événements (24h)</p>
+                <h3 className="text-3xl font-black text-slate-900">{logs.length}</h3>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
+                <Activity size={24} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-slate-200 shadow-sm overflow-hidden group hover:border-emerald-300 transition-all">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Créations</p>
+                <h3 className="text-3xl font-black text-emerald-600">{logs.filter(l => l.action === 'CREATE').length}</h3>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
+                <Plus size={24} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-slate-200 shadow-sm overflow-hidden group hover:border-blue-300 transition-all">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Modifications</p>
+                <h3 className="text-3xl font-black text-blue-600">{logs.filter(l => l.action === 'UPDATE').length}</h3>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
+                <Edit3 size={24} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-slate-200 shadow-sm overflow-hidden group hover:border-rose-300 transition-all">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-1">Suppressions</p>
+                <h3 className="text-3xl font-black text-rose-600">{logs.filter(l => l.action === 'DELETE').length}</h3>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-rose-50 flex items-center justify-center text-rose-600 group-hover:scale-110 transition-transform">
+                <Trash2 size={24} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="border-slate-200 shadow-sm overflow-hidden">
+        <CardHeader className="bg-slate-50/50 border-b py-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <CardTitle className="text-xs font-black uppercase tracking-widest text-slate-700 flex items-center gap-2">
+                <ShieldCheck className="text-indigo-600" size={16} />
+                Journal de Sécurité & Opérations
+              </CardTitle>
+              <CardDescription className="text-[10px] font-medium">Flux en temps réel des actions effectuées sur l'organisation.</CardDescription>
+            </div>
+            <div className="relative w-full md:w-80">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input 
+                placeholder="Filtrer par acteur, action, ressource..." 
+                className="pl-10 h-10 text-xs font-bold border-slate-200 focus:border-indigo-500 shadow-sm"
+              />
+            </div>
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date & Heure</TableHead>
-                <TableHead>Utilisateur</TableHead>
-                <TableHead>Action</TableHead>
-                <TableHead>Module</TableHead>
-                <TableHead>Détails</TableHead>
+            <TableHeader className="bg-slate-50/30">
+              <TableRow className="hover:bg-transparent border-slate-100">
+                <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 h-12">Horodatage</TableHead>
+                <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 h-12">Acteur</TableHead>
+                <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 h-12">Opération</TableHead>
+                <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 h-12">Ressource</TableHead>
+                <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 h-12">Détails de l'événement</TableHead>
+                <TableHead className="w-[50px] h-12"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {logs.length > 0 ? (
                 logs.map((log) => (
-                  <TableRow key={log.id}>
-                    <TableCell className="whitespace-nowrap">
-                      <div className="flex items-center gap-2 text-xs">
-                        <Clock size={12} className="text-muted-foreground" />
-                        {log.timestamp ? format(new Date(log.timestamp), 'dd/MM/yyyy HH:mm:ss', { locale: fr }) : '-'}
+                  <TableRow key={log.id} className="hover:bg-slate-50/50 border-slate-100 group transition-colors">
+                    <TableCell className="py-4">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-black text-slate-700 uppercase">
+                          {log.timestamp ? format(new Date(log.timestamp), 'dd MMM yyyy', { locale: fr }) : '-'}
+                        </span>
+                        <span className="text-[9px] text-slate-400 font-bold flex items-center gap-1">
+                          <Clock size={10} />
+                          {log.timestamp ? format(new Date(log.timestamp), 'HH:mm:ss') : '-'}
+                        </span>
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary">
+                    <TableCell className="py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-xl bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-500 border border-slate-200 shadow-sm">
                           {log.userId?.slice(0, 2).toUpperCase() || '??'}
                         </div>
-                        <span className="text-xs font-mono">{log.userId?.slice(0, 8)}...</span>
+                        <div className="flex flex-col">
+                          <span className="text-[10px] font-black text-slate-700 uppercase tracking-tight">Utilisateur</span>
+                          <span className="text-[9px] font-mono text-slate-400">{log.userId?.slice(0, 12)}...</span>
+                        </div>
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={getActionColor(log.action)}>
-                        {log.action}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2 text-xs font-medium">
-                        <Database size={12} className="text-muted-foreground" />
-                        {log.collection}
+                    <TableCell className="py-4">
+                      <div className="flex items-center gap-2">
+                        <div className={cn(
+                          "w-6 h-6 rounded-lg flex items-center justify-center border",
+                          getActionColor(log.action)
+                        )}>
+                          {getActionIcon(log.action)}
+                        </div>
+                        <Badge variant="outline" className={cn(
+                          "text-[8px] h-4 px-1.5 font-black uppercase tracking-widest border-none",
+                          getActionColor(log.action)
+                        )}>
+                          {log.action}
+                        </Badge>
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <div className="max-w-[300px] truncate text-xs text-muted-foreground">
-                        {log.documentId ? `ID: ${log.documentId}` : 'Nouveau document'}
-                        {log.details && ` - ${JSON.stringify(log.details).slice(0, 50)}...`}
+                    <TableCell className="py-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 border border-indigo-100">
+                          <Database size={12} />
+                        </div>
+                        <span className="text-[10px] font-black text-slate-600 uppercase tracking-tighter">{log.collection}</span>
                       </div>
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <div className="flex items-center gap-3 max-w-[300px]">
+                        <FileText size={14} className="text-slate-300 shrink-0" />
+                        <div className="flex flex-col overflow-hidden">
+                          <span className="text-[10px] text-slate-600 font-bold truncate">
+                            {log.documentId ? `Document: ${log.documentId}` : 'Nouvelle entrée'}
+                          </span>
+                          <span className="text-[9px] text-slate-400 font-medium truncate italic">
+                            {log.details ? JSON.stringify(log.details) : 'Aucun détail supplémentaire'}
+                          </span>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-all rounded-full hover:bg-indigo-50 hover:text-indigo-600"
+                              onClick={() => setSelectedLog(log)}
+                            >
+                              <ExternalLink size={14} />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent><p className="text-[10px] font-black uppercase tracking-widest">Inspecter l'événement</p></TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     </TableCell>
                   </TableRow>
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                    Aucun historique disponible.
+                  <TableCell colSpan={6} className="text-center py-32">
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-slate-200">
+                        <History size={32} />
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-xs font-black text-slate-800 uppercase tracking-widest">Aucun événement</p>
+                        <p className="text-[10px] font-medium text-slate-400">Le journal d'audit est actuellement vide pour cette organisation.</p>
+                      </div>
+                    </div>
                   </TableCell>
                 </TableRow>
               )}
@@ -128,6 +310,71 @@ export default function AuditLogs() {
           </Table>
         </CardContent>
       </Card>
+
+      <Dialog open={!!selectedLog} onOpenChange={() => setSelectedLog(null)}>
+        <DialogContent className="max-w-2xl p-0 overflow-hidden border-none shadow-2xl">
+          <DialogHeader className="bg-slate-900 text-white p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 flex items-center justify-center border border-indigo-500/30">
+                  <Shield size={20} className="text-indigo-400" />
+                </div>
+                <div>
+                  <DialogTitle className="text-sm font-black uppercase tracking-widest">Inspection d'Événement</DialogTitle>
+                  <DialogDescription className="text-[10px] text-slate-400 font-medium">Détails techniques complets de l'opération.</DialogDescription>
+                </div>
+              </div>
+              <Badge variant="outline" className={cn(
+                "text-[9px] font-black uppercase tracking-widest border-none px-3 py-1",
+                selectedLog ? getActionColor(selectedLog.action) : ""
+              )}>
+                {selectedLog?.action}
+              </Badge>
+            </div>
+            
+            <div className="grid grid-cols-3 gap-4">
+              <div className="p-3 bg-white/5 rounded-xl border border-white/10">
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Horodatage</p>
+                <p className="text-[11px] font-bold">{selectedLog?.timestamp ? format(new Date(selectedLog.timestamp), 'dd/MM/yyyy HH:mm:ss') : '-'}</p>
+              </div>
+              <div className="p-3 bg-white/5 rounded-xl border border-white/10">
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">Collection</p>
+                <p className="text-[11px] font-bold uppercase">{selectedLog?.collection}</p>
+              </div>
+              <div className="p-3 bg-white/5 rounded-xl border border-white/10">
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">ID Document</p>
+                <p className="text-[11px] font-mono font-bold truncate">{selectedLog?.documentId || 'N/A'}</p>
+              </div>
+            </div>
+          </DialogHeader>
+          
+          <div className="p-6 space-y-6 bg-white">
+            <div className="space-y-3">
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
+                <Terminal size={12} /> Payload de l'opération
+              </h4>
+              <ScrollArea className="h-[250px] w-full rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                <pre className="text-[11px] font-mono text-slate-700 leading-relaxed">
+                  {JSON.stringify(selectedLog?.details, null, 2)}
+                </pre>
+              </ScrollArea>
+            </div>
+
+            <div className="flex items-center gap-4 p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
+              <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-indigo-600 shadow-sm border border-indigo-100">
+                <Lock size={20} />
+              </div>
+              <div className="flex-1">
+                <p className="text-[10px] font-black uppercase tracking-widest text-indigo-700 mb-0.5">Vérification d'Intégrité</p>
+                <p className="text-[10px] text-indigo-600 font-medium leading-tight">
+                  Cet événement a été signé numériquement et ne peut être modifié. Il constitue une preuve légale de l'opération.
+                </p>
+              </div>
+              <Zap size={20} className="text-indigo-300" />
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

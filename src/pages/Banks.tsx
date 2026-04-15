@@ -29,15 +29,19 @@ import {
   DialogTitle, 
   DialogTrigger 
 } from '@/components/ui/dialog';
-import { Plus, Trash2, Edit2, Landmark, CreditCard } from 'lucide-react';
+import { Plus, Trash2, Edit2, Landmark, CreditCard, Search, Info, Building2, Wallet, ArrowRightLeft } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { handleFirestoreError, OperationType } from '../lib/error-handler';
 import { logAction } from '../lib/audit';
+import { cn } from '@/lib/utils';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function Banks() {
   const { userData } = useAuth();
   const [banks, setBanks] = useState<any[]>([]);
+  const [journals, setJournals] = useState<any[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingBank, setEditingBank] = useState<any>(null);
@@ -46,7 +50,8 @@ export default function Banks() {
     iban: '',
     bic: '',
     accountNumber: '',
-    currency: 'XAF'
+    currency: 'XAF',
+    journalId: ''
   });
 
   useEffect(() => {
@@ -59,7 +64,17 @@ export default function Banks() {
       handleFirestoreError(error, OperationType.LIST, `companies/${userData.companyId}/banks`);
     });
 
-    return () => unsubscribe();
+    const qJournals = query(collection(db, `companies/${userData.companyId}/journals`));
+    const unsubscribeJournals = onSnapshot(qJournals, (snapshot) => {
+      setJournals(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, `companies/${userData.companyId}/journals`);
+    });
+
+    return () => {
+      unsubscribe();
+      unsubscribeJournals();
+    };
   }, [userData]);
 
   const validateIBAN = (iban: string) => {
@@ -100,7 +115,7 @@ export default function Banks() {
       
       toast.success("Compte bancaire ajouté !");
       setIsAddOpen(false);
-      setNewBank({ name: '', iban: '', bic: '', accountNumber: '', currency: 'XAF' });
+      setNewBank({ name: '', iban: '', bic: '', accountNumber: '', currency: 'XAF', journalId: '' });
     } catch (error: any) {
       handleFirestoreError(error, OperationType.WRITE, `companies/${userData.companyId}/banks`);
       toast.error("Erreur : " + error.message);
@@ -152,12 +167,17 @@ export default function Banks() {
     }
   };
 
+  const filteredBanks = banks.filter(b => 
+    b.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    b.iban.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Banques</h1>
-          <p className="text-muted-foreground">Gérez les comptes bancaires de votre entreprise.</p>
+          <h1 className="text-3xl font-bold tracking-tight">Banques & Trésorerie</h1>
+          <p className="text-muted-foreground">Gérez les comptes bancaires et les journaux de trésorerie associés.</p>
         </div>
         <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
           <DialogTrigger render={
@@ -166,50 +186,64 @@ export default function Banks() {
               Nouveau Compte
             </Button>
           } />
-          <DialogContent>
+          <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
               <DialogTitle>Ajouter un compte bancaire</DialogTitle>
-              <DialogDescription>Enregistrez les coordonnées bancaires de l'entreprise.</DialogDescription>
+              <DialogDescription>Enregistrez les coordonnées bancaires et liez-les à un journal.</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="name" className="text-right">Nom Banque</Label>
-                <Input 
-                  id="name" 
-                  className="col-span-3" 
-                  placeholder="ex: Société Générale"
-                  value={newBank.name}
-                  onChange={(e) => setNewBank({...newBank, name: e.target.value})}
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Nom de la Banque</Label>
+                  <Input 
+                    id="name" 
+                    placeholder="ex: Société Générale"
+                    value={newBank.name}
+                    onChange={(e) => setNewBank({...newBank, name: e.target.value})}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="journal">Journal Associé</Label>
+                  <Select value={newBank.journalId} onValueChange={(v) => setNewBank({...newBank, journalId: v})}>
+                    <SelectTrigger id="journal">
+                      <SelectValue placeholder="Sélectionner..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {journals.filter(j => j.type === 'bank' || j.type === 'cash').map(j => (
+                        <SelectItem key={j.id} value={j.id}>{j.code} - {j.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="iban" className="text-right">IBAN</Label>
+              <div className="space-y-2">
+                <Label htmlFor="iban">IBAN</Label>
                 <Input 
                   id="iban" 
-                  className="col-span-3" 
                   placeholder="FR76 ..."
                   value={newBank.iban}
                   onChange={(e) => setNewBank({...newBank, iban: e.target.value.toUpperCase()})}
                 />
               </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="bic" className="text-right">BIC / SWIFT</Label>
-                <Input 
-                  id="bic" 
-                  className="col-span-3" 
-                  placeholder="SOGEFR ..."
-                  value={newBank.bic}
-                  onChange={(e) => setNewBank({...newBank, bic: e.target.value.toUpperCase()})}
-                />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="accountNumber" className="text-right">N° Compte</Label>
-                <Input 
-                  id="accountNumber" 
-                  className="col-span-3" 
-                  value={newBank.accountNumber}
-                  onChange={(e) => setNewBank({...newBank, accountNumber: e.target.value})}
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="bic">BIC / SWIFT</Label>
+                  <Input 
+                    id="bic" 
+                    placeholder="SOGEFR ..."
+                    value={newBank.bic}
+                    onChange={(e) => setNewBank({...newBank, bic: e.target.value.toUpperCase()})}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="accountNumber">N° Compte</Label>
+                  <Input 
+                    id="accountNumber" 
+                    placeholder="123456789"
+                    value={newBank.accountNumber}
+                    onChange={(e) => setNewBank({...newBank, accountNumber: e.target.value})}
+                  />
+                </div>
               </div>
             </div>
             <DialogFooter>
@@ -220,39 +254,75 @@ export default function Banks() {
         </Dialog>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Comptes Bancaires</CardTitle>
-          <CardDescription>Liste des comptes bancaires configurés.</CardDescription>
+      <Card className="border-primary/10 shadow-sm">
+        <CardHeader className="pb-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <CardTitle>Comptes Bancaires</CardTitle>
+              <CardDescription>Liste des comptes bancaires configurés pour l'entreprise.</CardDescription>
+            </div>
+            <div className="relative w-full md:w-72">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input 
+                placeholder="Rechercher une banque..." 
+                className="pl-9 h-9"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Banque</TableHead>
-                <TableHead>IBAN</TableHead>
-                <TableHead>BIC</TableHead>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Banque & Coordonnées</TableHead>
+                <TableHead>IBAN / BIC</TableHead>
+                <TableHead>Journal Lié</TableHead>
                 <TableHead>Devise</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {banks.length > 0 ? (
-                banks.map((bank) => (
-                  <TableRow key={bank.id} className="group">
-                    <TableCell className="font-bold">
-                      <div className="flex items-center gap-2">
-                        <CreditCard size={16} className="text-primary" />
-                        {bank.name}
+              {filteredBanks.length > 0 ? (
+                filteredBanks.map((bank) => (
+                  <TableRow key={bank.id} className="group hover:bg-muted/30 transition-colors">
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-primary/10 rounded-lg text-primary">
+                          <Landmark size={18} />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="font-bold text-sm">{bank.name}</span>
+                          <span className="text-[10px] text-muted-foreground">Compte: {bank.accountNumber || 'N/A'}</span>
+                        </div>
                       </div>
                     </TableCell>
-                    <TableCell className="font-mono text-xs">{bank.iban}</TableCell>
-                    <TableCell className="font-mono text-xs">{bank.bic || '-'}</TableCell>
                     <TableCell>
-                      <Badge variant="outline">{bank.currency}</Badge>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-mono text-[11px] font-medium">{bank.iban}</span>
+                        <span className="font-mono text-[10px] text-muted-foreground">{bank.bic || 'Pas de BIC'}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {bank.journalId ? (
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary" className="font-mono text-[10px]">
+                            {journals.find(j => j.id === bank.journalId)?.code}
+                          </Badge>
+                          <span className="text-[11px] text-muted-foreground truncate max-w-[100px]">
+                            {journals.find(j => j.id === bank.journalId)?.name}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground italic">Non lié</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="bg-muted/50">{bank.currency}</Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <Button 
                           variant="ghost" 
                           size="icon"
@@ -278,8 +348,19 @@ export default function Banks() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                    Aucun compte bancaire configuré.
+                  <TableCell colSpan={5} className="text-center py-20">
+                    <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                      <div className="p-4 bg-muted rounded-full">
+                        <Building2 size={32} />
+                      </div>
+                      <div className="space-y-1">
+                        <p className="font-bold text-foreground">Aucun compte bancaire trouvé</p>
+                        <p className="text-sm">Enregistrez vos comptes pour faciliter le rapprochement bancaire.</p>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={() => setIsAddOpen(true)} className="mt-2">
+                        <Plus size={14} className="mr-2" /> Nouveau Compte
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               )}
