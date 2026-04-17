@@ -401,83 +401,136 @@ export default function Invoices() {
   const generatePDF = (invoice: any) => {
     const doc = new jsPDF();
     const contact = contacts.find(c => c.id === invoice.contactId);
+    const currency = company?.currency || '€';
 
-    // Header & Logo Placeholder
-    doc.setFillColor(5, 150, 105); // Emerald 600
-    doc.rect(0, 0, 210, 40, 'F');
+    // professional header
+    doc.setFillColor(30, 41, 59); // Slate 800
+    doc.rect(0, 0, 210, 45, 'F');
     
     doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(28);
+    doc.text(company?.name?.toUpperCase() || 'EQUIPE PRO', 15, 25);
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text(company?.address || 'Siège Social, Ville, Pays', 15, 33);
+    doc.text(`NIF: ${company?.taxId || 'FR123456789'} • Tél: ${company?.phone || '+33 1 23 45 67 89'}`, 15, 38);
+
+    // Document Type Header
+    doc.setTextColor(30, 41, 59);
     doc.setFontSize(24);
-    doc.text(company?.name || 'VI Compt PRO', 14, 25);
+    doc.setFont('helvetica', 'bold');
+    doc.text(invoice.type === 'sale' ? 'FACTURE' : 'FACTURE FOURN.', 200, 70, { align: 'right' });
     
     doc.setFontSize(10);
-    doc.text(company?.address || 'Adresse de l\'entreprise', 14, 32);
-    doc.text(`NIF: ${company?.taxId || 'N/A'}`, 14, 37);
-
-    // Invoice Info Box
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(16);
-    doc.text('FACTURE', 140, 55);
-    doc.setFontSize(10);
-    doc.text(`Numéro: ${invoice.number}`, 140, 62);
-    doc.text(`Date: ${format(new Date(invoice.date), 'dd/MM/yyyy')}`, 140, 67);
-    doc.text(`Échéance: ${format(new Date(invoice.dueDate), 'dd/MM/yyyy')}`, 140, 72);
-
-    // Client Info
-    doc.setFontSize(12);
-    doc.text('DESTINATAIRE', 14, 55);
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    doc.text(contact?.name || 'Client inconnu', 14, 62);
     doc.setFont('helvetica', 'normal');
-    doc.text(contact?.address || 'Pas d\'adresse renseignée', 14, 67);
-    doc.text(contact?.phone || '', 14, 72);
-    doc.text(contact?.email || '', 14, 77);
+    const infoY = 80;
+    doc.text(`Numéro de facture:`, 140, infoY);
+    doc.setFont('helvetica', 'bold');
+    doc.text(invoice.number, 200, infoY, { align: 'right' });
+    
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Date d'émission:`, 140, infoY + 5);
+    doc.text(format(new Date(invoice.date), 'dd MMMM yyyy'), 200, infoY + 5, { align: 'right' });
+    
+    doc.text(`Date d'échéance:`, 140, infoY + 10);
+    doc.text(format(new Date(invoice.dueDate), 'dd MMMM yyyy'), 200, infoY + 10, { align: 'right' });
 
-    // Table
+    // Client Info Section
+    doc.setFillColor(248, 250, 252); // Slate 50
+    doc.rect(15, 65, 110, 35, 'F');
+    doc.setTextColor(100, 116, 139); // Slate 500
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.text('FACTURÉ À', 20, 72);
+    
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(11);
+    doc.text(contact?.name || 'Client Destinataire', 20, 80);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(contact?.address || 'Adresse complète du client', 20, 87);
+    doc.text(contact?.email || 'email@client.com', 20, 92);
+
+    // Line items table
     const tableData = invoice.items.map((item: any) => [
       item.description,
-      item.quantity,
-      `${item.price.toLocaleString()} ${company?.currency}`,
-      `${(item.quantity * item.price).toLocaleString()} ${company?.currency}`
+      { content: item.quantity, styles: { halign: 'center' } },
+      { content: item.price.toLocaleString(), styles: { halign: 'right' } },
+      { content: (item.quantity * item.price).toLocaleString(), styles: { halign: 'right' } }
     ]);
 
     autoTable(doc, {
-      startY: 90,
-      head: [['Description', 'Qté', 'Prix Unitaire', 'Total HT']],
+      startY: 110,
+      head: [['Désignation des prestations', 'Qté', 'Prix Unitaire', 'Montant HT']],
       body: tableData,
-      headStyles: { fillColor: [5, 150, 105] },
-      alternateRowStyles: { fillColor: [245, 245, 245] },
+      theme: 'striped',
+      headStyles: { 
+        fillColor: [30, 41, 59], 
+        textColor: 255, 
+        fontSize: 10, 
+        fontStyle: 'bold',
+        halign: 'left'
+      },
+      columnStyles: {
+        0: { cellWidth: 'auto' },
+        1: { cellWidth: 20 },
+        2: { cellWidth: 40 },
+        3: { cellWidth: 40 }
+      },
+      styles: { fontSize: 9, cellPadding: 5 },
+      alternateRowStyles: { fillColor: [249, 250, 251] }
     });
 
-    const finalY = (doc as any).lastAutoTable.finalY;
+    const finalY = (doc as any).lastAutoTable.finalY + 10;
     
-    // Totals
-    doc.setFontSize(10);
-    const totalX = 140;
-    doc.text(`Sous-total HT:`, totalX, finalY + 15);
-    doc.text(`${invoice.subtotal.toLocaleString()} ${company?.currency}`, 180, finalY + 15, { align: 'right' });
+    // Summary Section
+    const summaryX = 130;
+    doc.setFontSize(9);
+    doc.setTextColor(71, 85, 105);
+    doc.text('Total Hors Taxes', summaryX, finalY);
+    doc.setTextColor(30, 41, 59);
+    doc.text(`${invoice.subtotal.toLocaleString()} ${currency}`, 200, finalY, { align: 'right' });
     
-    doc.text(`TVA (${invoice.taxRate || 0}%):`, totalX, finalY + 22);
-    doc.text(`${invoice.taxAmount.toLocaleString()} ${company?.currency}`, 180, finalY + 22, { align: 'right' });
+    doc.setTextColor(71, 85, 105);
+    doc.text(`TVA (${invoice.taxRate || 0}%)`, summaryX, finalY + 7);
+    doc.setTextColor(30, 41, 59);
+    doc.text(`${invoice.taxAmount.toLocaleString()} ${currency}`, 200, finalY + 7, { align: 'right' });
     
-    doc.setDrawColor(5, 150, 105);
-    doc.setLineWidth(0.5);
-    doc.line(totalX, finalY + 26, 190, finalY + 26);
+    doc.setDrawColor(226, 232, 240);
+    doc.line(summaryX, finalY + 12, 200, finalY + 12);
     
-    doc.setFontSize(14);
+    doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text(`TOTAL TTC:`, totalX, finalY + 35);
-    doc.text(`${invoice.totalAmount.toLocaleString()} ${company?.currency}`, 180, finalY + 35, { align: 'right' });
+    doc.text('MONTANT TOTAL TTC', summaryX, finalY + 22);
+    doc.text(`${invoice.totalAmount.toLocaleString()} ${currency}`, 200, finalY + 22, { align: 'right' });
 
-    // Footer
+    // Conditional Payment Status Stamp
+    if (invoice.status === 'paid') {
+      doc.setDrawColor(16, 185, 129);
+      doc.setTextColor(16, 185, 129);
+      doc.setLineWidth(1);
+      doc.rect(15, finalY + 10, 40, 15);
+      doc.setFontSize(14);
+      doc.text('PAYÉE', 35, finalY + 20, { align: 'center' });
+    }
+
+    // Legal Mentions Footer
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
-    doc.setTextColor(100, 100, 100);
-    doc.text('Merci de votre confiance.', 105, 285, { align: 'center' });
-    doc.text(`${company?.name} - Généré par VI Compt PRO`, 105, 290, { align: 'center' });
+    doc.setTextColor(148, 163, 184);
+    const footerText = [
+      `Conditions de paiement: Échéance au ${format(new Date(invoice.dueDate), 'dd/MM/yyyy')}.`,
+      `En cas de retard, une pénalité de 3 fois le taux d'intérêt légal sera appliquée.`,
+      `VI Compt PRO - Intelligence Comptable au service de ${company?.name || 'votre croissance'}.`
+    ];
+    
+    doc.text(footerText[0], 105, 275, { align: 'center' });
+    doc.text(footerText[1], 105, 280, { align: 'center' });
+    doc.text(footerText[2], 105, 285, { align: 'center' });
 
-    doc.save(`Facture_${invoice.number}.pdf`);
+    doc.save(`${invoice.type.toUpperCase()}_${invoice.number}.pdf`);
   };
 
   const filteredInvoices = invoices.filter(inv => {
@@ -548,12 +601,10 @@ export default function Invoices() {
           <p className="text-muted-foreground">Gérez vos factures clients et vos factures fournisseurs.</p>
         </div>
         <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-          <DialogTrigger render={
-            <Button className="gap-2">
-              <Plus size={18} />
-              Nouvelle Facture
-            </Button>
-          } />
+          <DialogTrigger className="gap-2">
+            <Plus size={18} />
+            Nouvelle Facture
+          </DialogTrigger>
           <DialogContent className="max-w-4xl">
             <DialogHeader>
               <DialogTitle>Créer une facture</DialogTitle>
@@ -719,11 +770,9 @@ export default function Invoices() {
                 <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2">
                   <Badge variant="secondary" className="px-2 py-1">{selectedIds.length} sélectionnés</Badge>
                   <DropdownMenu>
-                    <DropdownMenuTrigger render={
-                      <Button variant="outline" size="sm" className="gap-2">
-                        Actions groupées <ChevronDown size={14} />
-                      </Button>
-                    } />
+                    <DropdownMenuTrigger variant="outline" size="sm" className="gap-2">
+                      Actions groupées <ChevronDown size={14} />
+                    </DropdownMenuTrigger>
                     <DropdownMenuContent align="start">
                       <DropdownMenuItem onClick={handleBulkMarkAsPaid} className="gap-2">
                         <CheckSquare size={14} className="text-emerald-500" /> Marquer comme payé

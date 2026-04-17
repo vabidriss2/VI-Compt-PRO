@@ -2,19 +2,59 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
 
-export const downloadPDF = (title: string, headers: string[][], data: any[][], filename: string) => {
+export const downloadPDF = (title: string, headers: string[][], data: any[][], filename: string, settings?: any) => {
   try {
     const doc = new jsPDF();
-    doc.setFontSize(18);
-    doc.text(title, 14, 22);
-    doc.setFontSize(10);
-    doc.text(`Généré le: ${new Date().toLocaleString()}`, 14, 30);
+    const accentColor = settings?.accentColor || '#4f46e5';
+    
+    // Header line with accent color
+    doc.setDrawColor(accentColor);
+    doc.setLineWidth(2);
+    doc.line(14, 15, 60, 15);
+    
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(22);
+    doc.setTextColor(30, 41, 59); // slate-800
+    doc.text(title, 14, 30);
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139); // slate-500
+    doc.text(`Document généré par VI Compt PRO • ${new Date().toLocaleString()}`, 14, 38);
 
     autoTable(doc, {
-      startY: 35,
+      startY: 45,
       head: headers,
       body: data,
+      headStyles: { 
+        fillColor: accentColor,
+        textColor: 255,
+        fontSize: 9,
+        fontStyle: 'bold'
+      },
+      bodyStyles: {
+        fontSize: 8,
+        textColor: 51
+      },
+      alternateRowStyles: {
+        fillColor: [248, 250, 252]
+      },
+      margin: { top: 45 }
     });
+
+    // Add footer if present
+    if (settings?.footerText) {
+      const pageCount = (doc as any).internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(7);
+        doc.setTextColor(148, 163, 184); // slate-400
+        const splitFooter = doc.splitTextToSize(settings.footerText, 180);
+        doc.text(splitFooter, 105, 285, { align: 'center' });
+        doc.text(`Page ${i} sur ${pageCount}`, 190, 285, { align: 'right' });
+      }
+    }
 
     doc.save(`${filename}.pdf`);
     toast.success(`Fichier ${filename}.pdf téléchargé avec succès`);

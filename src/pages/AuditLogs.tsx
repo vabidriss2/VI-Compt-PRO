@@ -107,70 +107,71 @@ export default function AuditLogs() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Journal d'Audit</h1>
-          <p className="text-muted-foreground">Traçabilité complète des opérations pour la conformité et la sécurité.</p>
+          <p className="text-muted-foreground italic text-sm">Traçabilité complète des opérations pour la conformité et la sécurité.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 rounded-full border border-emerald-100 mr-2">
+        <div className="flex items-center gap-3">
+          <Badge variant="outline" className="h-8 gap-2 bg-emerald-50 border-emerald-200 text-emerald-600 font-mono">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Live Feed</span>
-          </div>
-          <Button variant="outline" size="sm" className="h-10 px-4 text-[10px] font-black uppercase tracking-widest border-slate-200 hover:bg-slate-50 gap-2">
+            Live Feed Active
+          </Badge>
+          <div className="h-8 w-px bg-slate-200 mx-1" />
+          <Button variant="outline" size="sm" className="gap-2">
             <Download size={14} /> Exporter
           </Button>
-          <Button variant="outline" size="sm" className="h-10 px-4 text-[10px] font-black uppercase tracking-widest border-slate-200 hover:bg-slate-50 gap-2">
+          <Button variant="outline" size="sm" className="gap-2">
             <Filter size={14} /> Filtres
           </Button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card className="border-slate-200 shadow-sm overflow-hidden group hover:border-indigo-300 transition-all">
+        <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:ring-1 hover:ring-slate-400 transition-all">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Événements (24h)</p>
-                <h3 className="text-3xl font-black text-slate-900">{logs.length}</h3>
+                <p className="label-caps text-slate-400 mb-1">Événements (24h)</p>
+                <h3 className="text-3xl font-black text-slate-900 mono-data">{logs.length}</h3>
               </div>
-              <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
+              <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-900 group-hover:bg-slate-900 group-hover:text-white transition-all duration-300">
                 <Activity size={24} />
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card className="border-slate-200 shadow-sm overflow-hidden group hover:border-emerald-300 transition-all">
+        <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:ring-1 hover:ring-emerald-400 transition-all">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Créations</p>
-                <h3 className="text-3xl font-black text-emerald-600">{logs.filter(l => l.action === 'CREATE').length}</h3>
+                <p className="label-caps text-emerald-400 mb-1">Créations</p>
+                <h3 className="text-3xl font-black text-emerald-600 mono-data">{logs.filter(l => l.action === 'CREATE').length}</h3>
               </div>
-              <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-all duration-300">
                 <Plus size={24} />
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card className="border-slate-200 shadow-sm overflow-hidden group hover:border-blue-300 transition-all">
+        <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:ring-1 hover:ring-blue-400 transition-all">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Modifications</p>
-                <h3 className="text-3xl font-black text-blue-600">{logs.filter(l => l.action === 'UPDATE').length}</h3>
+                <p className="label-caps text-blue-400 mb-1">Modifications</p>
+                <h3 className="text-3xl font-black text-blue-600 mono-data">{logs.filter(l => l.action === 'UPDATE').length}</h3>
               </div>
-              <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all duration-300">
                 <Edit3 size={24} />
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card className="border-slate-200 shadow-sm overflow-hidden group hover:border-rose-300 transition-all">
+        <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden group hover:ring-1 hover:ring-rose-400 transition-all">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-1">Suppressions</p>
-                <h3 className="text-3xl font-black text-rose-600">{logs.filter(l => l.action === 'DELETE').length}</h3>
+                <p className="label-caps text-rose-400 mb-1">Suppressions</p>
+                <h3 className="text-3xl font-black text-rose-600 mono-data">{logs.filter(l => l.action === 'DELETE').length}</h3>
               </div>
-              <div className="w-12 h-12 rounded-2xl bg-rose-50 flex items-center justify-center text-rose-600 group-hover:scale-110 transition-transform">
+              <div className="w-12 h-12 rounded-2xl bg-rose-50 flex items-center justify-center text-rose-600 group-hover:bg-rose-600 group-hover:text-white transition-all duration-300">
                 <Trash2 size={24} />
               </div>
             </div>
@@ -178,21 +179,22 @@ export default function AuditLogs() {
         </Card>
       </div>
 
-      <Card className="border-slate-200 shadow-sm overflow-hidden">
-        <CardHeader className="bg-slate-50/50 border-b py-4">
+      <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden">
+        <div className="h-1.5 bg-gradient-to-r from-slate-900 via-slate-700 to-slate-400" />
+        <CardHeader className="bg-slate-50/30 border-b py-4">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <CardTitle className="text-xs font-black uppercase tracking-widest text-slate-700 flex items-center gap-2">
-                <ShieldCheck className="text-indigo-600" size={16} />
-                Journal de Sécurité & Opérations
+              <CardTitle className="text-xs font-black uppercase tracking-widest text-slate-800 flex items-center gap-2">
+                <Terminal className="text-slate-900" size={16} />
+                Système de Monitoring Audit
               </CardTitle>
-              <CardDescription className="text-[10px] font-medium">Flux en temps réel des actions effectuées sur l'organisation.</CardDescription>
+              <CardDescription className="text-[10px] font-bold text-slate-400">Flux d'événements cryptographiques et opérationnels.</CardDescription>
             </div>
             <div className="relative w-full md:w-80">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input 
-                placeholder="Filtrer par acteur, action, ressource..." 
-                className="pl-10 h-10 text-xs font-bold border-slate-200 focus:border-indigo-500 shadow-sm"
+                placeholder="Filtrer les journaux..." 
+                className="pl-10 h-10 text-xs font-black border-slate-200 focus:border-slate-400 transition-colors bg-white shadow-sm"
               />
             </div>
           </div>
@@ -275,15 +277,13 @@ export default function AuditLogs() {
                     <TableCell className="py-4">
                       <TooltipProvider>
                         <Tooltip>
-                          <TooltipTrigger>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-all rounded-full hover:bg-indigo-50 hover:text-indigo-600"
-                              onClick={() => setSelectedLog(log)}
-                            >
-                              <ExternalLink size={14} />
-                            </Button>
+                          <TooltipTrigger 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-all rounded-full hover:bg-indigo-50 hover:text-indigo-600"
+                            onClick={() => setSelectedLog(log)}
+                          >
+                            <ExternalLink size={14} />
                           </TooltipTrigger>
                           <TooltipContent><p className="text-[10px] font-black uppercase tracking-widest">Inspecter l'événement</p></TooltipContent>
                         </Tooltip>

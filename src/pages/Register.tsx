@@ -82,8 +82,32 @@ export default function Register() {
       toast.success("Compte créé avec succès !");
       navigate('/');
     } catch (error: any) {
-      handleFirestoreError(error, OperationType.WRITE, 'registration');
-      toast.error("Erreur d'inscription : " + error.message);
+      const authErrors = [
+        'auth/email-already-in-use',
+        'auth/weak-password',
+        'auth/invalid-email',
+        'auth/operation-not-allowed',
+        'auth/user-disabled'
+      ];
+
+      // Only log as Firestore Error if it's not a common auth validation error
+      if (!authErrors.includes(error.code)) {
+        handleFirestoreError(error, OperationType.WRITE, 'registration');
+      }
+      
+      let message = "Une erreur est survenue lors de l'inscription.";
+      
+      if (error.code === 'auth/email-already-in-use') {
+        message = "Cet email est déjà utilisé. Veuillez vous connecter ou utiliser un autre email.";
+      } else if (error.code === 'auth/weak-password') {
+        message = "Le mot de passe est trop faible (6 caractères minimum).";
+      } else if (error.code === 'auth/invalid-email') {
+        message = "L'adresse email n'est pas valide.";
+      } else {
+        message = error.message;
+      }
+      
+      toast.error(message);
     } finally {
       setLoading(false);
     }

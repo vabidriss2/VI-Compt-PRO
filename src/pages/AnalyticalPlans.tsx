@@ -135,12 +135,10 @@ export default function AnalyticalPlans() {
           <p className="text-muted-foreground">Gérez vos axes analytiques (projets, centres de coûts, départements).</p>
         </div>
         <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-          <DialogTrigger render={
-            <Button className="gap-2">
-              <Plus size={18} />
-              Nouvel Axe
-            </Button>
-          } />
+          <DialogTrigger className="gap-2">
+            <Plus size={18} />
+            Nouvel Axe
+          </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Ajouter un axe analytique</DialogTitle>

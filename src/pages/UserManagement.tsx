@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { collection, query, onSnapshot, where, doc, updateDoc } from 'firebase/firestore';
+import { useNavigate } from 'react-router-dom';
+import { collection, query, onSnapshot, where, doc, updateDoc, addDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { 
@@ -42,11 +43,23 @@ import {
   Smartphone,
   Globe,
   Settings,
-  Search
+  Search,
+  RefreshCw
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogFooter, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger 
+} from '@/components/ui/dialog';
 import { 
   Select, 
   SelectContent, 
@@ -68,10 +81,23 @@ import { cn } from '@/lib/utils';
 
 export default function UserManagement() {
   const { userData } = useAuth();
+  const navigate = useNavigate();
   const [users, setUsers] = useState<any[]>([]);
+  const [invites, setInvites] = useState<any[]>([]);
+  const [isInviteOpen, setIsInviteOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState('comptable');
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!userData?.companyId) return;
+    if (!userData) return;
+
+    if (userData.role !== 'admin' && userData.role !== 'super_admin') {
+      navigate('/');
+      return;
+    }
+
+    if (!userData.companyId) return;
 
     const q = query(
       collection(db, 'users'),
@@ -84,12 +110,84 @@ export default function UserManagement() {
       handleFirestoreError(error, OperationType.LIST, 'users');
     });
 
-    return () => unsubscribe();
+    const inviteQ = query(
+      collection(db, `companies/${userData.companyId}/invitations`),
+      where('status', '==', 'pending')
+    );
+    const unsubscribeInvites = onSnapshot(inviteQ, (snapshot) => {
+      setInvites(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'invitations');
+    });
+
+    return () => {
+      unsubscribe();
+      unsubscribeInvites();
+    };
   }, [userData]);
 
+  const handleInvite = async () => {
+    if (!inviteEmail) {
+      toast.error("Veuillez saisir un email");
+      return;
+    }
+    setLoading(true);
+    try {
+      const inviteRef = collection(db, `companies/${userData!.companyId}/invitations`);
+      await addDoc(inviteRef, {
+        email: inviteEmail,
+        role: inviteRole,
+        status: 'pending',
+        companyId: userData!.companyId,
+        invitedBy: userData!.uid,
+        createdAt: new Date().toISOString()
+      });
+
+      toast.success(`Invitation envoyée à ${inviteEmail}`);
+      setIsInviteOpen(false);
+      setInviteEmail('');
+      await logAction(userData!.companyId, userData!.uid, 'INVITE', 'users', inviteEmail, { role: inviteRole });
+    } catch (error: any) {
+      handleFirestoreError(error, OperationType.WRITE, 'invitations');
+      toast.error("Erreur d'invitation");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const canManageUser = (targetUser: any) => {
+    if (!userData || !targetUser) return false;
+    if (userData.uid === targetUser.id) return false; // Cannot manage self
+    
+    if (userData.role === 'super_admin') return true;
+    if (userData.role === 'admin') {
+      // Admins can only manage non-admins
+      return targetUser.role !== 'super_admin' && targetUser.role !== 'admin';
+    }
+    return false;
+  };
+
+  const handleRevoke = async (userId: string) => {
+    const targetUser = users.find(u => u.id === userId);
+    if (!canManageUser(targetUser)) {
+      toast.error("Vous n'avez pas les permissions nécessaires.");
+      return;
+    }
+
+    try {
+      const userRef = doc(db, 'users', userId);
+      await updateDoc(userRef, { companyId: null, role: 'none' });
+      toast.success("Accès révoqué");
+      await logAction(userData!.companyId, userData!.uid, 'REVOKE', 'users', userId, {});
+    } catch (error) {
+      toast.error("Erreur lors de la révocation");
+    }
+  };
+
   const handleRoleChange = async (userId: string, newRole: string) => {
-    if (userId === userData?.uid) {
-      toast.error("Vous ne pouvez pas modifier votre propre rôle.");
+    const targetUser = users.find(u => u.id === userId);
+    if (!canManageUser(targetUser)) {
+      toast.error("Vous n'avez pas les permissions nécessaires.");
       return;
     }
 
@@ -106,18 +204,127 @@ export default function UserManagement() {
     }
   };
 
+  const [isPermissionsOpen, setIsPermissionsOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<any>(null);
+  const [userPermissions, setUserPermissions] = useState<any>({});
+
+  const defaultPermissions = {
+    canCreateEntries: true,
+    canDeleteEntries: false,
+    canValidateInvoices: true,
+    canExportReports: true,
+    canClosePeriod: false,
+    canManageUsers: false,
+    canAccessSettings: false
+  };
+
+  const handleOpenPermissions = (user: any) => {
+    setEditingUser(user);
+    setUserPermissions(user.permissions || {
+      ...defaultPermissions,
+      ...(user.role === 'admin' || user.role === 'super_admin' ? { canManageUsers: true, canAccessSettings: true, canClosePeriod: true, canDeleteEntries: true } : {}),
+      ...(user.role === 'consultant' ? { canCreateEntries: false, canValidateInvoices: false } : {})
+    });
+    setIsPermissionsOpen(true);
+  };
+
+  const handleSavePermissions = async () => {
+    if (!editingUser) return;
+    setLoading(true);
+    try {
+      await updateDoc(doc(db, 'users', editingUser.id), { permissions: userPermissions });
+      toast.success("Permissions enregistrées pour " + editingUser.displayName);
+      setIsPermissionsOpen(false);
+      await logAction(userData!.companyId, userData!.uid, 'UPDATE_PERMISSIONS', 'users', editingUser.id, userPermissions);
+    } catch (error) {
+      toast.error("Erreur lors de la sauvegarde");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getRoleBadge = (role: string) => {
     switch (role) {
       case 'super_admin': return <Badge className="bg-purple-600 text-white border-none text-[9px] font-black uppercase tracking-widest px-2 py-0.5 shadow-sm shadow-purple-100">Super Admin</Badge>;
       case 'admin': return <Badge className="bg-indigo-600 text-white border-none text-[9px] font-black uppercase tracking-widest px-2 py-0.5 shadow-sm shadow-indigo-100">Administrateur</Badge>;
-      case 'accountant': return <Badge className="bg-emerald-600 text-white border-none text-[9px] font-black uppercase tracking-widest px-2 py-0.5 shadow-sm shadow-emerald-100">Comptable</Badge>;
-      case 'viewer': return <Badge className="bg-slate-100 text-slate-500 border-slate-200 text-[9px] font-black uppercase tracking-widest px-2 py-0.5">Consultant</Badge>;
+      case 'comptable': return <Badge className="bg-emerald-600 text-white border-none text-[9px] font-black uppercase tracking-widest px-2 py-0.5 shadow-sm shadow-emerald-100">Comptable</Badge>;
+      case 'consultant': return <Badge className="bg-slate-100 text-slate-500 border-slate-200 text-[9px] font-black uppercase tracking-widest px-2 py-0.5">Consultant</Badge>;
       default: return <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5">{role}</Badge>;
     }
   };
 
+  const PermissionToggle = ({ label, id, description }: { label: string, id: string, description: string }) => (
+    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100 hover:border-indigo-200 transition-colors">
+      <div className="space-y-1">
+        <Label className="text-sm font-bold text-slate-800">{label}</Label>
+        <p className="text-[10px] text-slate-500 font-medium">{description}</p>
+      </div>
+      <Switch 
+        checked={userPermissions[id]} 
+        onCheckedChange={(checked) => setUserPermissions({ ...userPermissions, [id]: checked })} 
+      />
+    </div>
+  );
+
   return (
     <div className="space-y-6">
+      <Dialog open={isPermissionsOpen} onOpenChange={setIsPermissionsOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShieldCheck className="text-indigo-600" size={20} />
+              Gérer les permissions : {editingUser?.displayName}
+            </DialogTitle>
+            <DialogDescription>
+              Ajustez finement les accès pour ce membre de l'équipe.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-4 max-h-[400px] overflow-y-auto px-1">
+            <PermissionToggle 
+              id="canCreateEntries" 
+              label="Saisie Comptable" 
+              description="Autoriser la création et modification des écritures."
+            />
+            <PermissionToggle 
+              id="canDeleteEntries" 
+              label="Suppression Écritures" 
+              description="Droit de supprimer des transactions (Risque élevé)."
+            />
+            <PermissionToggle 
+              id="canValidateInvoices" 
+              label="Validation de Factures" 
+              description="Droit de marquer les factures comme validées ou payées."
+            />
+            <PermissionToggle 
+              id="canExportReports" 
+              label="Export de Rapports" 
+              description="Génération de PDF, Excel et exports FEC."
+            />
+            <PermissionToggle 
+              id="canClosePeriod" 
+              label="Clôture Périodique" 
+              description="Droit de verrouiller les périodes comptables."
+            />
+            <PermissionToggle 
+              id="canManageUsers" 
+              label="Gestion d'Équipe" 
+              description="Inviter, révoquer et gérer les droits des autres membres."
+            />
+            <PermissionToggle 
+              id="canAccessSettings" 
+              label="Paramètres Système" 
+              description="Modifier les informations de la société et les préférences globales."
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsPermissionsOpen(false)}>Annuler</Button>
+            <Button onClick={handleSavePermissions} disabled={loading} className="gap-2">
+              {loading && <RefreshCw size={14} className="animate-spin" />}
+              Enregistrer les permissions
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Utilisateurs & Droits</h1>
@@ -127,9 +334,55 @@ export default function UserManagement() {
           <Button variant="outline" size="sm" className="h-10 px-4 text-[10px] font-black uppercase tracking-widest border-slate-200 hover:bg-slate-50 gap-2">
             <Settings size={14} /> Paramètres Sécurité
           </Button>
-          <Button size="sm" className="h-10 px-6 text-[10px] font-black uppercase tracking-widest gap-2 bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-100">
-            <UserPlus size={14} /> Inviter un membre
-          </Button>
+          <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
+            <DialogTrigger 
+              size="sm" 
+              className="h-10 px-6 text-[10px] font-black uppercase tracking-widest gap-2 bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-100"
+            >
+              <UserPlus size={14} /> Inviter un membre
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Inviter un nouveau membre</DialogTitle>
+                <DialogDescription>
+                  L'utilisateur recevra un email pour rejoindre votre organisation.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="email">Adresse Email</Label>
+                  <Input 
+                    id="email" 
+                    placeholder="expert@exemple.com" 
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="role">Rôle assigné</Label>
+                  <Select value={inviteRole} onValueChange={setInviteRole}>
+                    <SelectTrigger id="role" className="text-xs font-bold">
+                      <SelectValue placeholder="Choisir un rôle" />
+                    </SelectTrigger>
+                    <SelectContent className="text-xs font-bold uppercase tracking-widest">
+                      {userData?.role === 'super_admin' && (
+                        <SelectItem value="super_admin">Super Admin</SelectItem>
+                      )}
+                      <SelectItem value="admin">Administrateur</SelectItem>
+                      <SelectItem value="comptable">Comptable</SelectItem>
+                      <SelectItem value="consultant">Consultant</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsInviteOpen(false)}>Annuler</Button>
+                <Button onClick={handleInvite} disabled={loading}>
+                  {loading ? "Envoi..." : "Envoyer l'invitation"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
@@ -165,7 +418,7 @@ export default function UserManagement() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-1">Invitations</p>
-                <h3 className="text-3xl font-black text-amber-600">1</h3>
+                <h3 className="text-3xl font-black text-amber-600">{invites.length}</h3>
               </div>
               <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-600 group-hover:scale-110 transition-transform">
                 <Mail size={24} />
@@ -262,7 +515,7 @@ export default function UserManagement() {
                       <TableCell className="py-4 text-right">
                         <div className="flex justify-end items-center gap-2">
                           <Select 
-                            disabled={user.id === userData?.uid || userData?.role !== 'super_admin'}
+                            disabled={!canManageUser(user)}
                             value={user.role} 
                             onValueChange={(v) => handleRoleChange(user.id, v)}
                           >
@@ -270,25 +523,41 @@ export default function UserManagement() {
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent className="text-[10px] font-black uppercase tracking-widest">
-                              <SelectItem value="super_admin">Super Admin</SelectItem>
+                              {userData?.role === 'super_admin' && (
+                                <SelectItem value="super_admin">Super Admin</SelectItem>
+                              )}
                               <SelectItem value="admin">Administrateur</SelectItem>
-                              <SelectItem value="accountant">Comptable</SelectItem>
-                              <SelectItem value="viewer">Consultant</SelectItem>
+                              <SelectItem value="comptable">Comptable</SelectItem>
+                              <SelectItem value="consultant">Consultant</SelectItem>
                             </SelectContent>
                           </Select>
                           
                           <DropdownMenu>
-                            <DropdownMenuTrigger>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
-                                <MoreVertical size={14} />
-                              </Button>
+                            <DropdownMenuTrigger 
+                              variant="ghost" 
+                              size="icon" 
+                              disabled={!canManageUser(user)}
+                              className="h-8 w-8 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity rounded-full disabled:opacity-0"
+                            >
+                              <MoreVertical size={14} />
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="text-[10px] font-black uppercase tracking-widest w-48 p-2">
                               <DropdownMenuItem className="gap-3 py-2 rounded-lg cursor-pointer"><User size={14} className="text-slate-400" /> Voir le profil</DropdownMenuItem>
+                              <DropdownMenuItem 
+                                className="gap-3 py-2 rounded-lg cursor-pointer"
+                                onClick={() => handleOpenPermissions(user)}
+                              >
+                                <ShieldCheck size={14} className="text-slate-400" /> Gérer les permissions
+                              </DropdownMenuItem>
                               <DropdownMenuItem className="gap-3 py-2 rounded-lg cursor-pointer"><History size={14} className="text-slate-400" /> Journal d'audit</DropdownMenuItem>
                               <DropdownMenuItem className="gap-3 py-2 rounded-lg cursor-pointer"><Smartphone size={14} className="text-slate-400" /> Appareils de confiance</DropdownMenuItem>
                               <Separator className="my-1" />
-                              <DropdownMenuItem className="gap-3 py-2 rounded-lg cursor-pointer text-rose-600 focus:text-rose-600 focus:bg-rose-50"><Ban size={14} /> Révoquer l'accès</DropdownMenuItem>
+                               <DropdownMenuItem 
+                                className="gap-3 py-2 rounded-lg cursor-pointer text-rose-600 focus:text-rose-600 focus:bg-rose-50"
+                                onClick={() => handleRevoke(user.id)}
+                              >
+                                <Ban size={14} /> Révoquer l'accès
+                              </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
@@ -306,24 +575,42 @@ export default function UserManagement() {
                 <Clock size={14} /> Invitations en attente
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-amber-200 shadow-sm">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-2xl bg-amber-100 flex items-center justify-center text-amber-600 border border-amber-200">
-                    <Mail size={20} />
+            <CardContent className="p-4 space-y-3">
+              {invites.map((invite) => (
+                <div key={invite.id} className="flex items-center justify-between p-4 bg-white rounded-2xl border border-amber-200 shadow-sm">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-2xl bg-amber-100 flex items-center justify-center text-amber-600 border border-amber-200">
+                      <Mail size={20} />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-xs font-black text-slate-800 uppercase tracking-tight">{invite.email}</span>
+                      <span className="text-[9px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-2">
+                        <Clock size={10} /> Rôle: {invite.role} • Envoyée le {new Date(invite.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex flex-col">
-                    <span className="text-xs font-black text-slate-800 uppercase tracking-tight">expert@cabinet-compta.fr</span>
-                    <span className="text-[9px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-2">
-                      <Clock size={10} /> Envoyée il y a 2 jours • Expire dans 5 jours
-                    </span>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-9 px-4 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-rose-600"
+                      onClick={async () => {
+                        try {
+                          await updateDoc(doc(db, `companies/${userData!.companyId}/invitations`, invite.id), { status: 'expired' });
+                          toast.success("Invitation annulée");
+                        } catch (e) {
+                          toast.error("Erreur");
+                        }
+                      }}
+                    >
+                      Annuler
+                    </Button>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" className="h-9 px-4 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-rose-600">Annuler</Button>
-                  <Button variant="outline" size="sm" className="h-9 px-4 text-[10px] font-black uppercase tracking-widest text-amber-600 border-amber-200 bg-white hover:bg-amber-50 shadow-sm">Renvoyer</Button>
-                </div>
-              </div>
+              ))}
+              {invites.length === 0 && (
+                <p className="text-[10px] text-center font-bold text-slate-400 uppercase tracking-widest py-4">Aucune invitation en attente</p>
+              )}
             </CardContent>
           </Card>
         </div>

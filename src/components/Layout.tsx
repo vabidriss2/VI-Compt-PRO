@@ -6,9 +6,11 @@ import {
   FileText, 
   Users, 
   BarChart3, 
-  Settings, 
-  LogOut, 
-  Menu, 
+  Settings,
+  Search,
+  LogOut,
+  Menu,
+  RefreshCw,
   X,
   ChevronRight,
   ChevronDown,
@@ -42,6 +44,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { NotificationBell } from './NotificationBell';
+import CommandPalette from './CommandPalette';
 
 const SidebarItem = ({ icon: Icon, label, to, active, collapsed, onClick }: any) => (
   <Link
@@ -106,9 +109,16 @@ const SidebarGroup = ({ label, items, collapsed, pathname, onItemClick, defaultO
   );
 };
 
+import { 
+  Sheet, 
+  SheetContent, 
+  SheetHeader, 
+  SheetTitle, 
+  SheetTrigger 
+} from '@/components/ui/sheet';
+
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [collapsed, setCollapsed] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
   const { userData, company } = useAuth();
 
@@ -182,21 +192,23 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         { icon: Archive, label: 'Archivage Légal', to: '/archive' },
       ]
     },
-    {
-      label: "8. ADMINISTRATION",
-      items: [
-        { icon: UserCog, label: 'Utilisateurs & Droits', to: '/users' },
-        { icon: Database, label: 'Sauvegarde', to: '/backup' },
-        { icon: History, label: 'Historique des actions', to: '/audit' },
-        { icon: Settings, label: 'Paramètres', to: '/settings' },
-      ]
-    }
+    ...(userData?.role === 'admin' || userData?.role === 'super_admin' ? [
+      {
+        label: "8. ADMINISTRATION",
+        items: [
+          { icon: UserCog, label: 'Utilisateurs & Droits', to: '/users' },
+          { icon: Database, label: 'Sauvegarde', to: '/backup' },
+          { icon: History, label: 'Historique des actions', to: '/audit' },
+          { icon: Settings, label: 'Paramètres', to: '/settings' },
+        ]
+      }
+    ] : [])
   ];
 
   const handleLogout = () => auth.signOut();
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
+    <div className="flex h-screen bg-background overflow-hidden font-sans">
       {/* Sidebar - Desktop */}
       <aside 
         className={cn(
@@ -221,7 +233,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           </Button>
         </div>
 
-        <ScrollArea className="flex-1 px-3 py-4 [mask-image:linear-gradient(to_bottom,transparent,black_20px,black_calc(100%-20px),transparent)]">
+        <ScrollArea className="flex-1 px-3 py-4">
           {menuGroups.map((group) => (
             <SidebarGroup
               key={group.label}
@@ -233,104 +245,101 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           ))}
         </ScrollArea>
 
-        <div className="p-4 border-top">
+        <div className="p-4 border-t">
           <Button 
             variant="ghost" 
             className={cn("w-full justify-start gap-3 text-destructive hover:text-destructive hover:bg-destructive/10", collapsed && "justify-center px-2")}
             onClick={handleLogout}
           >
             <LogOut size={20} />
-            {!collapsed && <span>Déconnexion</span>}
+            {!collapsed && <span className="text-sm font-bold uppercase tracking-widest">Déconnexion</span>}
           </Button>
         </div>
       </aside>
-
-      {/* Mobile Menu Overlay */}
-      {mobileMenuOpen && (
-        <div 
-          className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm md:hidden"
-          onClick={() => setMobileMenuOpen(false)}
-        >
-          <div className="fixed inset-y-0 left-0 w-64 bg-card shadow-lg flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-6 border-b">
-              <div className="flex items-center gap-2 font-bold text-xl tracking-tight text-primary">
-                <div className="bg-primary text-primary-foreground p-1.5 rounded-lg">
-                  <Building2 size={20} />
-                </div>
-                <div className="flex flex-col leading-none">
-                  <span>VI Compt</span>
-                  <span className="text-[10px] text-emerald-500 font-black uppercase tracking-widest">PRO</span>
-                </div>
-              </div>
-              <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(false)}>
-                <X size={20} />
-              </Button>
-            </div>
-            <ScrollArea className="flex-1 p-4">
-              <nav className="space-y-2">
-                {menuGroups.map((group, index) => (
-                  <SidebarGroup
-                    key={group.label}
-                    label={group.label}
-                    items={group.items}
-                    collapsed={false}
-                    pathname={location.pathname}
-                    onItemClick={() => setMobileMenuOpen(false)}
-                    defaultOpen={index === 0 || group.items.some((item: any) => location.pathname === item.to)}
-                  />
-                ))}
-              </nav>
-              
-              <div className="mt-8 pt-6 border-t">
-                <Button 
-                  variant="ghost" 
-                  className="w-full justify-start gap-3 text-destructive hover:text-destructive hover:bg-destructive/10"
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    handleLogout();
-                  }}
-                >
-                  <LogOut size={20} />
-                  <span>Déconnexion</span>
-                </Button>
-              </div>
-            </ScrollArea>
-          </div>
-        </div>
-      )}
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <header className="h-16 border-b bg-card flex items-center justify-between px-4 md:px-8 shrink-0">
           <div className="flex items-center gap-4 flex-1">
-            <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileMenuOpen(true)}>
-              <Menu size={20} />
-            </Button>
+            {/* Mobile Sidebar Trigger */}
+            <Sheet>
+              <SheetTrigger
+                render={
+                  <Button variant="ghost" size="icon" className="md:hidden">
+                    <Menu size={20} />
+                  </Button>
+                }
+              />
+              <SheetContent side="left" className="p-0 w-72">
+                <SheetHeader className="p-6 border-b">
+                  <SheetTitle className="flex items-center gap-2 font-bold text-xl tracking-tight text-primary">
+                    <div className="bg-primary text-primary-foreground p-1.5 rounded-lg">
+                      <Building2 size={20} />
+                    </div>
+                    <div className="flex flex-col leading-none">
+                      <span>VI Compt</span>
+                      <span className="text-[10px] text-emerald-500 font-black uppercase tracking-widest text-left">PRO</span>
+                    </div>
+                  </SheetTitle>
+                </SheetHeader>
+                <ScrollArea className="h-[calc(100vh-80px)] p-4">
+                  <nav className="space-y-2">
+                    {menuGroups.map((group, index) => (
+                      <SidebarGroup
+                        key={group.label}
+                        label={group.label}
+                        items={group.items}
+                        collapsed={false}
+                        pathname={location.pathname}
+                        defaultOpen={index === 0 || group.items.some((item: any) => location.pathname === item.to)}
+                      />
+                    ))}
+                  </nav>
+                  
+                  <div className="mt-8 pt-6 border-t">
+                    <Button 
+                      variant="ghost" 
+                      className="w-full justify-start gap-3 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={handleLogout}
+                    >
+                      <LogOut size={20} />
+                      <span className="text-sm font-bold uppercase tracking-widest">Déconnexion</span>
+                    </Button>
+                  </div>
+                </ScrollArea>
+              </SheetContent>
+            </Sheet>
+
             <div className="md:hidden flex items-center gap-2 font-bold text-lg tracking-tight text-primary">
               <div className="bg-primary text-primary-foreground p-1 rounded-md">
                 <Building2 size={16} />
               </div>
-              <span>VI Compt <span className="text-emerald-500 text-[10px]">PRO</span></span>
+              <span className="font-black tracking-tighter">VI Compt <span className="text-emerald-500 text-[10px]">PRO</span></span>
             </div>
             <div className="hidden md:block">
-              <h2 className="text-sm font-medium text-muted-foreground">
-                {company?.name || 'Chargement...'}
+              <h2 className="text-xs font-black uppercase tracking-widest text-muted-foreground bg-accent/50 px-3 py-1 rounded-full border border-border/50">
+                🏢 {company?.name || 'VAB&IDRISS TECH'}
               </h2>
             </div>
             
             {/* Global Search Bar */}
-            <div className="hidden lg:flex relative w-full max-w-md ml-8">
-              <Calculator className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-              <input 
-                type="text" 
-                placeholder="Recherche globale (Factures, Contacts, Comptes...)" 
-                className="w-full bg-muted/50 border-none rounded-full py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-primary/20 transition-all outline-none"
-              />
+            <div className="hidden lg:flex relative w-full max-w-md ml-8 group">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+              <div 
+                className="w-full bg-muted/50 hover:bg-muted border border-transparent hover:border-border rounded-full py-2 pl-10 pr-12 text-sm text-muted-foreground cursor-pointer flex items-center justify-between transition-all"
+                onClick={() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))}
+              >
+                <span>Rechercher une action ou un compte...</span>
+                <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-black bg-background border px-1.5 py-0.5 rounded shadow-sm">
+                  <span className="text-[8px] opacity-50 tracking-tighter">CTRL</span>K
+                </span>
+              </div>
             </div>
           </div>
 
           <div className="flex items-center gap-4">
+            <CommandPalette />
             <NotificationBell />
             <div className="hidden sm:flex flex-col items-end">
               <span className="text-sm font-semibold">{userData?.displayName || 'Utilisateur'}</span>

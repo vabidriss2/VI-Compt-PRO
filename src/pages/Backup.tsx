@@ -251,10 +251,8 @@ export default function Backup() {
                     </TableCell>
                     <TableCell className="py-4 text-right">
                       <DropdownMenu>
-                        <DropdownMenuTrigger>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-slate-100">
-                            <MoreHorizontal size={14} />
-                          </Button>
+                        <DropdownMenuTrigger variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-slate-100">
+                          <MoreHorizontal size={14} />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48 p-1">
                           <DropdownMenuItem className="text-[10px] font-black uppercase tracking-widest gap-2 py-2 cursor-pointer" onClick={() => handleDownloadBackup(backup.date)}>

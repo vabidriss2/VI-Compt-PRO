@@ -150,11 +150,9 @@ export default function Taxes() {
           <p className="text-muted-foreground">Configurez les taux de TVA et autres taxes pour vos opérations.</p>
         </div>
         <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-          <DialogTrigger render={
-            <Button className="gap-2">
-              <Plus size={18} /> Nouvelle Taxe
-            </Button>
-          } />
+          <DialogTrigger className="gap-2">
+            <Plus size={18} /> Nouvelle Taxe
+          </DialogTrigger>
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
               <DialogTitle>Ajouter une taxe</DialogTitle>

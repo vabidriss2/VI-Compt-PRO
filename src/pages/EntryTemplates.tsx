@@ -131,7 +131,9 @@ export default function EntryTemplates() {
           <p className="text-muted-foreground">Automatisez vos écritures répétitives en définissant des schémas pré-remplis.</p>
         </div>
         <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-          <DialogTrigger render={<Button className="gap-2"><Plus size={18} /> Nouveau Modèle</Button>} />
+          <DialogTrigger className="gap-2">
+            <Plus size={18} /> Nouveau Modèle
+          </DialogTrigger>
           <DialogContent className="max-w-3xl">
             <DialogHeader>
               <DialogTitle>Configurer un nouveau modèle</DialogTitle>

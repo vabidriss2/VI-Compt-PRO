@@ -301,10 +301,8 @@ export default function Payments() {
                   </TableCell>
                   <TableCell className="py-3">
                     <DropdownMenu>
-                      <DropdownMenuTrigger>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <MoreVertical size={14} className="text-slate-400" />
-                        </Button>
+                      <DropdownMenuTrigger variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <MoreVertical size={14} className="text-slate-400" />
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="text-[10px] font-bold uppercase tracking-widest">
                         <DropdownMenuItem className="gap-2"><CreditCard size={12} /> Payer par CB</DropdownMenuItem>

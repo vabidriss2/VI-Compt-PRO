@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Landmark, Upload, CheckCircle2, AlertCircle, Search, Loader2, ArrowRightLeft, X, Info, ChevronRight, Zap, History, FileText } from 'lucide-react';
+import { Landmark, Upload, Download, CheckCircle2, AlertCircle, Search, Loader2, ArrowRightLeft, X, Info, ChevronRight, Zap, History, FileText } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { logAction } from '../lib/audit';
@@ -67,29 +67,86 @@ export default function BankRecon() {
     };
   }, [userData]);
 
-  const handleImport = async () => {
-    setIsImporting(true);
-    try {
-      // Simulate importing a bank statement
-      const mockLines = [
-        { date: '2024-03-12', label: 'VIREMENT RECU CLIENT X', amount: 1200, type: 'credit', reconciled: null },
-        { date: '2024-03-14', label: 'PRLV ORANGE', amount: -45.90, type: 'debit', reconciled: null },
-        { date: '2024-03-15', label: 'ACHAT CARREFOUR', amount: -82.30, type: 'debit', reconciled: null },
-      ];
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
 
-      const batch = writeBatch(db);
-      mockLines.forEach(line => {
-        const ref = doc(collection(db, `companies/${userData!.companyId}/bank_statements`));
-        batch.set(ref, { ...line, companyId: userData!.companyId, createdAt: serverTimestamp() });
-      });
-
-      await batch.commit();
-      toast.success("Relevé importé avec succès (Simulation)");
-    } catch (error) {
-      toast.error("Erreur lors de l'importation");
-    } finally {
-      setIsImporting(false);
+    if (!file.name.endsWith('.csv')) {
+      toast.error("Format de fichier non supporté. Veuillez utiliser un fichier CSV.");
+      return;
     }
+
+    setIsImporting(true);
+    const reader = new FileReader();
+
+    reader.onload = async (e) => {
+      try {
+        const text = e.target?.result as string;
+        const lines = text.split('\n').filter(l => l.trim());
+        const header = lines[0].toLowerCase();
+        
+        // Simple mapping attempt: date, label, amount
+        const parsedLines = lines.slice(1)
+          .map(line => {
+            const parts = line.split(/[,;]/); // handle both , and ;
+            if (parts.length < 3) return null;
+            
+            // Try to identify columns (this is a simple heuristic)
+            let date = parts[0].trim();
+            let label = parts[1].trim();
+            let amountStr = parts[2].trim().replace(/[€\s]/g, '').replace(',', '.');
+            
+            const amt = parseFloat(amountStr);
+            if (isNaN(amt)) return null;
+
+            return {
+              date: date,
+              label: label,
+              amount: amt,
+              type: amt > 0 ? 'credit' : 'debit',
+              reconciled: null,
+              companyId: userData!.companyId,
+              createdAt: serverTimestamp()
+            };
+          })
+          .filter(Boolean);
+
+        if (parsedLines.length === 0) {
+          toast.error("Format de fichier invalide. Format attendu: date, libellé, montant");
+          return;
+        }
+
+        const batch = writeBatch(db);
+        parsedLines.forEach(line => {
+          const ref = doc(collection(db, `companies/${userData!.companyId}/bank_statements`));
+          batch.set(ref, line);
+        });
+
+        await batch.commit();
+        toast.success(`${parsedLines.length} transactions importées avec succès`);
+        await logAction(userData!.companyId, userData!.uid, 'IMPORT', 'bank_statements', file.name, { count: parsedLines.length });
+      } catch (error) {
+        console.error(error);
+        toast.error("Erreur lors de la lecture du fichier");
+      } finally {
+        setIsImporting(false);
+        // Clear input
+        event.target.value = '';
+      }
+    };
+
+    reader.readAsText(file);
+  };
+
+  const downloadTemplate = () => {
+    const csvContent = "data:text/csv;charset=utf-8,date,label,amount\n2024-04-17,Virement Client ABC,1250.00\n2024-04-17,Achat Fournisseur XYZ,-450.25";
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "modele_releve_bancaire.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleManualReconcile = async () => {
@@ -139,10 +196,41 @@ export default function BankRecon() {
   };
 
   const handleAutoReconcile = async () => {
+    if (statementLines.length === 0 || bankEntries.length === 0) {
+      toast.error("Rien à rapprocher");
+      return;
+    }
+    
     setLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      toast.success("Rapprochement automatique terminé.");
+      const batch = writeBatch(db);
+      let matches = 0;
+      
+      statementLines.forEach(line => {
+        // Find an entry with the same amount and same date (simple match)
+        const match = bankEntries.find(entry => {
+          const entryAmount = (entry.debit || 0) - (entry.credit || 0);
+          return Math.abs(entryAmount - line.amount) < 0.01 && entry.date === line.date;
+        });
+        
+        if (match) {
+          const reconId = `AUTO-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+          batch.update(doc(db, `companies/${userData!.companyId}/journal_entries`, match.id), { reconciled: reconId });
+          batch.update(doc(db, `companies/${userData!.companyId}/bank_statements`, line.id), { reconciled: reconId });
+          matches++;
+          
+          // Remove from local array so it doesn't match again in this loop
+          const idx = bankEntries.indexOf(match);
+          if (idx > -1) bankEntries.splice(idx, 1);
+        }
+      });
+      
+      if (matches > 0) {
+        await batch.commit();
+        toast.success(`${matches} rapprochements automatiques effectués !`);
+      } else {
+        toast.info("Aucun match automatique trouvé.");
+      }
     } catch (error) {
       toast.error("Erreur lors du rapprochement");
     } finally {
@@ -165,14 +253,27 @@ export default function BankRecon() {
           <p className="text-muted-foreground">Assurez la concordance entre vos relevés et votre comptabilité.</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" size="sm" className="gap-2" onClick={downloadTemplate}>
+            <Download size={14} className="text-slate-500" />
+            Télécharger Modèle
+          </Button>
           <Button variant="outline" size="sm" className="gap-2" onClick={handleAutoReconcile} disabled={loading}>
             <Zap size={14} className="text-amber-500" />
             Auto-Rapprochement
           </Button>
-          <Button size="sm" className="gap-2" onClick={handleImport} disabled={isImporting}>
-            {isImporting ? <Loader2 className="animate-spin" size={14} /> : <Upload size={14} />}
-            Importer Relevé
-          </Button>
+          <div className="relative">
+            <input 
+              type="file" 
+              accept=".csv"
+              className="absolute inset-0 opacity-0 cursor-pointer" 
+              onChange={handleFileUpload}
+              disabled={isImporting}
+            />
+            <Button size="sm" className="gap-2 bg-slate-900 text-white hover:bg-slate-800" disabled={isImporting}>
+              {isImporting ? <Loader2 className="animate-spin" size={14} /> : <Upload size={14} />}
+              Importer Relevé
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -304,7 +405,6 @@ export default function BankRecon() {
                             <div className="flex flex-col items-center gap-2 text-slate-400">
                               <FileText size={32} strokeWidth={1} />
                               <p className="text-xs">Aucun relevé importé</p>
-                              <Button variant="link" size="sm" onClick={handleImport}>Importer maintenant</Button>
                             </div>
                           </TableCell>
                         </TableRow>

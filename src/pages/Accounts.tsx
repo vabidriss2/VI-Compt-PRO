@@ -189,12 +189,10 @@ export default function Accounts() {
           <p className="text-muted-foreground">Gérez la structure de vos comptes financiers.</p>
         </div>
         <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-          <DialogTrigger render={
-            <Button className="gap-2">
-              <Plus size={18} />
-              Nouveau Compte
-            </Button>
-          } />
+          <DialogTrigger className="gap-2">
+            <Plus size={18} />
+            Nouveau Compte
+          </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Ajouter un compte</DialogTitle>

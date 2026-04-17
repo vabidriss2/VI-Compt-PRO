@@ -164,12 +164,10 @@ export default function Journals() {
           <p className="text-muted-foreground">Configurez vos journaux comptables (Achats, Ventes, Banque, etc.).</p>
         </div>
         <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-          <DialogTrigger render={
-            <Button className="gap-2">
-              <Plus size={18} />
-              Nouveau Journal
-            </Button>
-          } />
+          <DialogTrigger className="gap-2">
+            <Plus size={18} />
+            Nouveau Journal
+          </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Ajouter un journal</DialogTitle>

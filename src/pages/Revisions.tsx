@@ -231,10 +231,8 @@ export default function Revisions() {
                       </TableCell>
                       <TableCell className="text-right">
                         <Dialog>
-                          <DialogTrigger>
-                            <Button variant="ghost" size="sm" className="h-8 gap-2" onClick={() => setSelectedPoint(p)}>
-                              Détails <ChevronRight size={14} />
-                            </Button>
+                          <DialogTrigger variant="ghost" size="sm" className="h-8 gap-2" onClick={() => setSelectedPoint(p)}>
+                            Détails <ChevronRight size={14} />
                           </DialogTrigger>
                           <DialogContent className="max-w-2xl">
                             <DialogHeader>

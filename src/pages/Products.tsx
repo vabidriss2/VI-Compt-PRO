@@ -206,11 +206,9 @@ export default function Products() {
             <Download size={14} /> Exporter
           </Button>
           <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-            <DialogTrigger>
-              <Button className="h-10 px-6 text-[10px] font-black uppercase tracking-widest gap-2 bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-100">
-                <Plus size={18} />
-                Nouveau Produit
-              </Button>
+            <DialogTrigger className="h-10 px-6 text-[10px] font-black uppercase tracking-widest gap-2 bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-100">
+              <Plus size={18} />
+              Nouveau Produit
             </DialogTrigger>
             <DialogContent className="max-w-2xl border-none shadow-2xl">
               <DialogHeader className="bg-slate-50 p-6 border-b">

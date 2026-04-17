@@ -11,7 +11,34 @@
         "address": { "type": "string" },
         "email": { "type": "string", "format": "email" },
         "phone": { "type": "string" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "createdAt": { "type": "string", "format": "date-time" },
+        "invoiceSettings": {
+          "type": "object",
+          "properties": {
+            "logoUrl": { "type": "string" },
+            "footerText": { "type": "string" },
+            "paymentTerms": { "type": "string" },
+            "accentColor": { "type": "string" },
+            "showBankDetails": { "type": "boolean" }
+          }
+        },
+        "reminderSettings": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "rules": { 
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "days": { "type": "number", "description": "Days after/before due date" },
+                  "message": { "type": "string" },
+                  "type": { "type": "string", "enum": ["before", "after"] }
+                }
+              }
+            }
+          }
+        }
       },
       "required": ["name", "currency"]
     },
@@ -21,7 +48,7 @@
       "type": "object",
       "properties": {
         "email": { "type": "string", "format": "email" },
-        "role": { "type": "string", "enum": ["super_admin", "accountant", "manager", "cashier", "auditor"] },
+        "role": { "type": "string", "enum": ["super_admin", "admin", "comptable", "consultant"] },
         "companyId": { "type": "string" },
         "displayName": { "type": "string" },
         "photoURL": { "type": "string" },
@@ -127,6 +154,46 @@
         "isActive": { "type": "boolean" }
       },
       "required": ["name", "rate", "companyId"]
+    },
+    "EntryTemplate": {
+      "title": "EntryTemplate",
+      "description": "A reusable template for journal entries.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "lines": { "type": "array" },
+        "companyId": { "type": "string" }
+      },
+      "required": ["name", "lines", "companyId"]
+    },
+    "BankStatement": {
+      "title": "BankStatement",
+      "description": "An imported bank statement line.",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "format": "date" },
+        "label": { "type": "string" },
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["debit", "credit"] },
+        "reconciled": { "type": "string", "description": "ID of the reconciliation match." },
+        "companyId": { "type": "string" }
+      },
+      "required": ["date", "label", "amount", "companyId"]
+    },
+    "Invitation": {
+      "title": "Invitation",
+      "description": "An invitation sent to a user to join a company.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["admin", "comptable", "consultant"] },
+        "status": { "type": "string", "enum": ["pending", "accepted", "expired"] },
+        "companyId": { "type": "string" },
+        "invitedBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "role", "status", "companyId", "invitedBy", "createdAt"]
     }
   },
   "firestore": {
@@ -138,6 +205,9 @@
     "/companies/{companyId}/contacts/{contactId}": { "schema": "Contact", "description": "Customers and suppliers." },
     "/companies/{companyId}/invoices/{invoiceId}": { "schema": "Invoice", "description": "Invoices and bills." },
     "/companies/{companyId}/taxes/{taxId}": { "schema": "Tax", "description": "Tax configurations." },
-    "/companies/{companyId}/audit_logs/{logId}": { "schema": "AuditLog", "description": "Audit trail." }
+    "/companies/{companyId}/audit_logs/{logId}": { "schema": "AuditLog", "description": "Audit trail." },
+    "/companies/{companyId}/entry_templates/{templateId}": { "schema": "EntryTemplate", "description": "Reusable accounting templates." },
+    "/companies/{companyId}/bank_statements/{statementId}": { "schema": "BankStatement", "description": "Bank statement lines." },
+    "/companies/{companyId}/invitations/{invitationId}": { "schema": "Invitation", "description": "Pending invitations for the company." }
   }
 }

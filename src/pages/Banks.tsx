@@ -180,12 +180,10 @@ export default function Banks() {
           <p className="text-muted-foreground">Gérez les comptes bancaires et les journaux de trésorerie associés.</p>
         </div>
         <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-          <DialogTrigger render={
-            <Button className="gap-2">
-              <Plus size={18} />
-              Nouveau Compte
-            </Button>
-          } />
+          <DialogTrigger className="gap-2">
+            <Plus size={18} />
+            Nouveau Compte
+          </DialogTrigger>
           <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
               <DialogTitle>Ajouter un compte bancaire</DialogTitle>

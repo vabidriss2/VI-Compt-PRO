@@ -1,6 +1,8 @@
 import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip"
 
 import { cn } from "@/lib/utils"
+import { buttonVariants } from "@/components/ui/button"
+import { type VariantProps } from "class-variance-authority"
 
 function TooltipProvider({
   delay = 0,
@@ -19,8 +21,19 @@ function Tooltip({ ...props }: TooltipPrimitive.Root.Props) {
   return <TooltipPrimitive.Root data-slot="tooltip" {...props} />
 }
 
-function TooltipTrigger({ ...props }: TooltipPrimitive.Trigger.Props) {
-  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />
+function TooltipTrigger({
+  className,
+  variant,
+  size,
+  ...props
+}: TooltipPrimitive.Trigger.Props & VariantProps<typeof buttonVariants>) {
+  return (
+    <TooltipPrimitive.Trigger
+      data-slot="tooltip-trigger"
+      className={cn(variant || size ? buttonVariants({ variant, size, className }) : className)}
+      {...props}
+    />
+  )
 }
 
 function TooltipContent({

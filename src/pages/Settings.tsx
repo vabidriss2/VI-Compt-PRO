@@ -28,6 +28,7 @@ import {
   CreditCard, 
   Key, 
   Smartphone,
+  FileText,
   CheckCircle2,
   AlertCircle,
   Info,
@@ -55,6 +56,12 @@ export default function Settings() {
   const [currency, setCurrency] = useState(company?.currency || 'XAF');
   const [loading, setLoading] = useState(false);
   const [displayName, setDisplayName] = useState(userData?.displayName || '');
+  
+  // Invoice Settings
+  const [invoiceFooter, setInvoiceFooter] = useState(company?.invoiceSettings?.footerText || '');
+  const [paymentTerms, setPaymentTerms] = useState(company?.invoiceSettings?.paymentTerms || '');
+  const [accentColor, setAccentColor] = useState(company?.invoiceSettings?.accentColor || '#4f46e5');
+  const [showBankDetails, setShowBankDetails] = useState(company?.invoiceSettings?.showBankDetails ?? true);
 
   // Sync state with company data when it loads
   useEffect(() => {
@@ -63,6 +70,12 @@ export default function Settings() {
       setTaxId(company.taxId || '');
       if (company.currency) {
         setCurrency(company.currency);
+      }
+      if (company.invoiceSettings) {
+        setInvoiceFooter(company.invoiceSettings.footerText || '');
+        setPaymentTerms(company.invoiceSettings.paymentTerms || '');
+        setAccentColor(company.invoiceSettings.accentColor || '#4f46e5');
+        setShowBankDetails(company.invoiceSettings.showBankDetails ?? true);
       }
     }
     if (userData) {
@@ -94,7 +107,13 @@ export default function Settings() {
       await updateDoc(doc(db, 'companies', userData.companyId), {
         name: companyName,
         taxId: taxId,
-        currency: currency
+        currency: currency,
+        invoiceSettings: {
+          footerText: invoiceFooter,
+          paymentTerms: paymentTerms,
+          accentColor: accentColor,
+          showBankDetails: showBankDetails
+        }
       });
       toast.success("Informations de l'entreprise mises à jour !");
     } catch (error: any) {
@@ -122,6 +141,9 @@ export default function Settings() {
         <TabsList className="bg-slate-100 p-1 h-11 border border-slate-200 shadow-sm">
           <TabsTrigger value="company" className="gap-2 text-[10px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-sm px-6">
             <Building2 size={14} /> Organisation
+          </TabsTrigger>
+          <TabsTrigger value="templates" className="gap-2 text-[10px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-sm px-6">
+            <FileText size={14} /> Modèles PDF
           </TabsTrigger>
           <TabsTrigger value="profile" className="gap-2 text-[10px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-sm px-6">
             <User size={14} /> Profil Utilisateur
@@ -216,6 +238,100 @@ export default function Settings() {
                 <Button onClick={handleUpdateCompany} disabled={loading} className="gap-2 bg-indigo-600 hover:bg-indigo-700 h-10 px-10 text-[10px] font-black uppercase tracking-widest shadow-md">
                   <Save size={16} />
                   {loading ? "Synchronisation..." : "Enregistrer les modifications"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="templates" className="space-y-6">
+          <Card className="border-slate-200 shadow-sm overflow-hidden">
+            <CardHeader className="bg-slate-50/50 border-b py-4">
+              <CardTitle className="text-xs font-black uppercase tracking-widest text-slate-700">Personnalisation des PDF</CardTitle>
+              <CardDescription className="text-[10px] font-medium">Configurez l'apparence de vos factures et rapports générés.</CardDescription>
+            </CardHeader>
+            <CardContent className="p-6 space-y-8">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Couleur d'accentuation</Label>
+                    <div className="flex gap-2">
+                      <Input 
+                        type="color" 
+                        value={accentColor} 
+                        onChange={(e) => setAccentColor(e.target.value)}
+                        className="w-12 h-10 p-1 border-slate-200"
+                      />
+                      <Input 
+                        value={accentColor} 
+                        onChange={(e) => setAccentColor(e.target.value)}
+                        className="flex-1 h-10 text-xs font-bold border-slate-200"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Mentions en bas de page</Label>
+                    <textarea 
+                      className="w-full min-h-[100px] rounded-md border border-slate-200 bg-transparent px-3 py-2 text-xs font-medium shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-500"
+                      placeholder="Identifiant fiscal, capital social, mentions légales..."
+                      value={invoiceFooter}
+                      onChange={(e) => setInvoiceFooter(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Conditions de paiement par défaut</Label>
+                    <textarea 
+                      className="w-full min-h-[100px] rounded-md border border-slate-200 bg-transparent px-3 py-2 text-xs font-medium shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-500"
+                      placeholder="Paiement à réception, 30 jours fin de mois..."
+                      value={paymentTerms}
+                      onChange={(e) => setPaymentTerms(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                    <input 
+                      type="checkbox" 
+                      id="showBank"
+                      checked={showBankDetails}
+                      onChange={(e) => setShowBankDetails(e.target.checked)}
+                      className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <Label htmlFor="showBank" className="text-xs font-bold text-slate-700 cursor-pointer">Afficher les coordonnées bancaires sur les factures</Label>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Aperçu du modèle</Label>
+                  <div className="border border-slate-200 rounded-2xl p-6 bg-white shadow-lg aspect-[1/1.414] flex flex-col scale-90 origin-top">
+                    <div className="h-4 w-24 rounded-full mb-8" style={{ backgroundColor: accentColor }} />
+                    <div className="flex justify-between items-start mb-12">
+                      <div className="space-y-1">
+                        <div className="h-4 w-32 bg-slate-100 rounded" />
+                        <div className="h-3 w-48 bg-slate-50 rounded" />
+                      </div>
+                      <div className="h-10 w-10 bg-slate-100 rounded-lg" />
+                    </div>
+                    <div className="space-y-4 mb-auto">
+                      <div className="h-8 w-full bg-slate-50 rounded" />
+                      <div className="h-3 w-full bg-slate-100 rounded" />
+                      <div className="h-3 w-full bg-slate-100 rounded" />
+                      <div className="h-3 w-2/3 bg-slate-100 rounded" />
+                    </div>
+                    <div className="pt-8 border-t border-slate-100">
+                      <div className="h-3 w-full bg-slate-50 rounded mb-2" />
+                      <div className="h-2 w-full bg-slate-50/50 rounded" />
+                      <div className="text-[10px] mt-4 text-center text-slate-300 font-mono text-[8px]">DOCUMENT PDF GÉNÉRÉ</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-6 border-t border-slate-100">
+                <Button onClick={handleUpdateCompany} disabled={loading} className="gap-2 bg-indigo-600 hover:bg-indigo-700 h-10 px-10 text-[10px] font-black uppercase tracking-widest shadow-md">
+                  {loading ? <RefreshCw className="animate-spin" size={16} /> : <Save size={16} />}
+                  Enregistrer les Modèles
                 </Button>
               </div>
             </CardContent>

@@ -259,10 +259,8 @@ export default function Drafts() {
                   </TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
-                      <DropdownMenuTrigger>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreHorizontal size={14} />
-                        </Button>
+                      <DropdownMenuTrigger variant="ghost" size="icon" className="h-8 w-8">
+                        <MoreHorizontal size={14} />
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-40">
                         <DropdownMenuItem className="gap-2">

@@ -39,6 +39,8 @@ import {
   CheckCircle2, 
   AlertCircle, 
   Clock,
+  Activity,
+  Calendar,
   ChevronRight,
   MoreVertical,
   ArrowDownLeft,
@@ -247,37 +249,46 @@ export default function Entries() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Saisie Comptable</h1>
-          <p className="text-muted-foreground">Enregistrez vos écritures avec précision et rapidité dans le grand livre.</p>
+          <p className="text-muted-foreground italic text-sm">Enregistrez vos écritures avec précision et rapidité dans le grand livre.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={resetForm} className="h-10 px-4 text-[10px] font-black uppercase tracking-widest border-slate-200 hover:bg-slate-50">
-            <RefreshCw size={14} className="mr-2" /> Réinitialiser
+        <div className="flex items-center gap-3">
+          <Badge variant="outline" className="h-8 gap-2 bg-slate-50 border-slate-200 text-slate-600 font-mono">
+            <Activity size={14} className={cn(loading && "animate-spin")} />
+            Système Équilibré
+          </Badge>
+          <div className="h-8 w-px bg-slate-200 mx-1" />
+          <Button variant="outline" size="sm" onClick={resetForm} className="gap-2">
+            <RefreshCw size={14} /> Réinitialiser
           </Button>
-          <Button onClick={handleSave} disabled={!isBalanced || loading} className="h-10 px-6 text-[10px] font-black uppercase tracking-widest gap-2 bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-200">
+          <Button onClick={handleSave} disabled={!isBalanced || loading} className="gap-2 bg-slate-900 hover:bg-slate-800 shadow-lg shadow-slate-200">
             <Save size={14} className={loading ? "animate-spin" : ""} />
-            {loading ? "Enregistrement..." : "Valider l'écriture"}
+            {loading ? "Calcul..." : "Valider l'écriture"}
           </Button>
         </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-4">
         <div className="lg:col-span-3 space-y-6">
-          <Card className="border-slate-200 shadow-sm overflow-hidden">
-            <CardHeader className="bg-slate-50/50 border-b py-4">
+          <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden">
+            <div className="h-1.5 bg-gradient-to-r from-slate-900 via-slate-700 to-slate-400" />
+            <CardHeader className="bg-slate-50/30 border-b py-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-xs font-black uppercase tracking-widest text-slate-700">Entête de Pièce Comptable</CardTitle>
-                  <CardDescription className="text-[10px] font-medium">Informations générales de l'écriture.</CardDescription>
+                  <CardTitle className="text-sm font-black uppercase tracking-widest text-slate-800 flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-slate-900" />
+                    Pièce Comptable
+                  </CardTitle>
+                  <CardDescription className="text-[10px] font-bold text-slate-400 mt-0.5">Configuration de l'en-tête de l'écriture</CardDescription>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Label className="text-[10px] uppercase font-black tracking-widest text-slate-400">Modèle :</Label>
+                  <span className="text-[10px] font-black uppercase tracking-tighter text-slate-400">Modélisation :</span>
                   <Select onValueChange={applyTemplate}>
-                    <SelectTrigger className="h-8 w-48 text-[10px] font-bold border-slate-200 bg-white">
+                    <SelectTrigger className="h-8 w-48 text-[11px] font-black border-slate-200 bg-white hover:bg-slate-50 transition-colors shadow-sm">
                       <SelectValue placeholder="Appliquer un modèle" />
                     </SelectTrigger>
-                    <SelectContent className="text-[10px] font-bold">
+                    <SelectContent>
                       {templates.map(t => (
-                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                        <SelectItem key={t.id} value={t.id} className="text-xs font-bold">{t.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -285,29 +296,32 @@ export default function Entries() {
               </div>
             </CardHeader>
             <CardContent className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 p-6 bg-slate-50/50 rounded-2xl border border-slate-100">
                 <div className="space-y-2">
-                  <Label className="text-[10px] uppercase font-black tracking-widest text-slate-500">Date d'opération</Label>
-                  <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-10 text-xs font-bold border-slate-200 focus:border-indigo-500" />
+                  <Label className="label-caps px-1 text-slate-500">Date d'opération</Label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                    <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="pl-10 h-10 text-xs font-black border-slate-200 focus:border-slate-400 transition-colors bg-white" />
+                  </div>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-[10px] uppercase font-black tracking-widest text-slate-500">Journal de saisie</Label>
+                  <Label className="label-caps px-1 text-slate-500">Journal de saisie</Label>
                   <Select value={journalId} onValueChange={setJournalId}>
-                    <SelectTrigger className="h-10 text-xs font-bold border-slate-200 focus:border-indigo-500">
-                      <SelectValue placeholder="Sélectionner un journal" />
+                    <SelectTrigger className="h-10 text-xs font-black border-slate-200 bg-white focus:border-slate-400 shadow-sm">
+                      <SelectValue placeholder="Sélectionner..." />
                     </SelectTrigger>
-                    <SelectContent className="text-xs font-bold">
+                    <SelectContent>
                       {journals.map(j => (
-                        <SelectItem key={j.id} value={j.id}>{j.code} - {j.name}</SelectItem>
+                        <SelectItem key={j.id} value={j.id} className="text-xs font-bold">{j.code} — {j.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-[10px] uppercase font-black tracking-widest text-slate-500">Référence Pièce</Label>
+                  <Label className="label-caps px-1 text-slate-500">Référence / Pièce</Label>
                   <div className="relative">
-                    <Input placeholder="ex: FAC-2024-001" value={reference} onChange={(e) => setReference(e.target.value)} className="h-10 text-xs font-mono font-bold border-slate-200 pr-10" />
-                    <Button variant="ghost" size="icon" className="absolute right-1 top-1 h-8 w-8 text-slate-400" onClick={() => setReference(generateReference())}>
+                    <Input placeholder="ex: FAC-2024-001" value={reference} onChange={(e) => setReference(e.target.value)} className="h-10 text-xs font-mono font-black border-slate-200 pr-10 bg-white focus:border-slate-400" />
+                    <Button variant="ghost" size="icon" className="absolute right-1 top-1 h-8 w-8 text-slate-300 hover:text-slate-600" onClick={() => setReference(generateReference())}>
                       <RefreshCw size={12} />
                     </Button>
                   </div>
@@ -316,13 +330,13 @@ export default function Entries() {
             </CardContent>
           </Card>
 
-          <Card className="border-slate-200 shadow-sm overflow-hidden">
-            <div className="bg-slate-900 px-6 py-3 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Lignes d'Écriture</span>
+          <Card className="border-none shadow-xl shadow-slate-200/50 bg-white overflow-hidden">
+            <div className="bg-slate-950 px-6 py-3.5 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Lignes de Transaction</span>
                 <Badge variant="outline" className={cn(
                   "text-[9px] h-5 border-none font-black uppercase tracking-widest",
-                  isBalanced ? "bg-emerald-500/20 text-emerald-400" : "bg-rose-500/20 text-rose-400"
+                  isBalanced ? "bg-emerald-500/10 text-emerald-400" : "bg-rose-500/10 text-rose-400"
                 )}>
                   {isBalanced ? "Équilibrée" : "Déséquilibrée"}
                 </Badge>
@@ -336,83 +350,85 @@ export default function Entries() {
             </div>
             <CardContent className="p-0">
               <div className="divide-y divide-slate-100">
-                <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-500">
-                  <div className="col-span-3">Compte Général</div>
+                <div className="grid grid-cols-12 gap-4 px-6 py-4 bg-slate-50/50 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                  <div className="col-span-3">Compte Général (Plan)</div>
                   <div className="col-span-4">Libellé de l'opération</div>
                   <div className="col-span-2 text-right">Débit</div>
                   <div className="col-span-2 text-right">Crédit</div>
                   <div className="col-span-1"></div>
                 </div>
-                {lines.map((line, index) => (
-                  <div key={index} className="grid grid-cols-12 gap-4 px-6 py-4 items-center group hover:bg-slate-50/50 transition-colors">
-                    <div className="col-span-3">
-                      <Select value={line.accountId} onValueChange={(v) => updateLine(index, 'accountId', v)}>
-                        <SelectTrigger className="h-9 text-[11px] font-bold border-slate-200 bg-white focus:ring-0 focus:border-indigo-500">
-                          <SelectValue placeholder="Sélectionner" />
-                        </SelectTrigger>
-                        <SelectContent className="text-[11px] font-bold">
-                          {accounts.map(acc => (
-                            <SelectItem key={acc.id} value={acc.id}>{acc.code} - {acc.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="col-span-4">
-                      <Input 
-                        placeholder="Description de la ligne" 
-                        className="h-9 text-[11px] font-medium border-slate-200 focus:border-indigo-500"
-                        value={line.description} 
-                        onChange={(e) => updateLine(index, 'description', e.target.value)}
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <div className="relative">
+                <div className="max-h-[500px] overflow-y-auto custom-scrollbar divide-y divide-slate-100">
+                  {lines.map((line, index) => (
+                    <div key={index} className="grid grid-cols-12 gap-4 px-6 py-4 items-center group hover:bg-slate-50/30 transition-colors animate-in fade-in slide-in-from-top-1">
+                      <div className="col-span-3">
+                        <Select value={line.accountId} onValueChange={(v) => updateLine(index, 'accountId', v)}>
+                          <SelectTrigger className="h-9 text-[11px] font-black border-slate-200 bg-white shadow-sm hover:bg-slate-50">
+                            <SelectValue placeholder="Code" />
+                          </SelectTrigger>
+                          <SelectContent className="text-[11px] font-bold">
+                            {accounts.map(acc => (
+                              <SelectItem key={acc.id} value={acc.id} className="font-mono text-xs">
+                                <span className="font-black text-slate-900 mr-2">{acc.code}</span> — {acc.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="col-span-4">
+                        <Input 
+                          placeholder="Description de la ligne..." 
+                          className="h-9 text-[11px] font-black border-slate-200 bg-white shadow-sm"
+                          value={line.description} 
+                          onChange={(e) => updateLine(index, 'description', e.target.value)}
+                        />
+                      </div>
+                      <div className="col-span-2 text-right">
                         <Input 
                           type="number" 
-                          className="h-9 text-[11px] text-right font-mono font-bold border-slate-200 focus:border-indigo-500 pr-2"
+                          className="h-9 text-[11px] text-right font-mono font-black border-slate-200 bg-white shadow-sm text-emerald-600"
                           value={line.debit || ''} 
                           onChange={(e) => updateLine(index, 'debit', Number(e.target.value))}
                         />
                       </div>
-                    </div>
-                    <div className="col-span-2">
-                      <div className="relative">
+                      <div className="col-span-2 text-right">
                         <Input 
                           type="number" 
-                          className="h-9 text-[11px] text-right font-mono font-bold border-slate-200 focus:border-indigo-500 pr-2"
+                          className="h-9 text-[11px] text-right font-mono font-black border-slate-200 bg-white shadow-sm text-rose-600"
                           value={line.credit || ''} 
                           onChange={(e) => updateLine(index, 'credit', Number(e.target.value))}
                         />
                       </div>
+                      <div className="col-span-1 flex justify-end">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8 text-slate-300 hover:text-rose-500 hover:bg-rose-50 opacity-0 group-hover:opacity-100 transition-all" 
+                          onClick={() => removeLine(index)}
+                        >
+                          <Trash2 size={14} />
+                        </Button>
+                      </div>
                     </div>
-                    <div className="col-span-1 flex justify-end">
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-full transition-all" onClick={() => removeLine(index)}>
-                              <Trash2 size={14} />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent className="text-[10px] font-bold uppercase tracking-widest">Supprimer la ligne</TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-              <div className="p-6 bg-slate-50/50 flex flex-col md:flex-row items-center justify-between border-t border-slate-100 gap-6">
-                <Button variant="outline" size="sm" onClick={addLine} className="h-9 px-6 text-[10px] font-black uppercase tracking-widest border-slate-200 hover:bg-white hover:text-indigo-600 shadow-sm">
-                  <Plus size={14} className="mr-2" /> Ajouter une ligne
+              <div className="p-6 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={addLine} 
+                  className="h-9 px-6 text-[10px] font-black uppercase tracking-widest border-slate-200 bg-white hover:bg-slate-900 hover:text-white transition-all shadow-sm"
+                >
+                  <Plus size={12} className="mr-2" /> Insérer une ligne
                 </Button>
-                <div className="flex items-center gap-10">
+                <div className="flex items-center gap-12">
                   <div className="text-right">
-                    <p className="text-[9px] uppercase font-black tracking-widest text-slate-400 mb-1">Total Débit</p>
-                    <p className="text-lg font-mono font-black text-slate-900">{totalDebit.toLocaleString()} <span className="text-[10px] text-slate-400">{company?.currency}</span></p>
+                    <p className="text-[9px] uppercase font-black tracking-[0.15em] text-slate-400 mb-1">Total Débit</p>
+                    <p className="text-xl font-mono font-black text-slate-900">{totalDebit.toLocaleString()} {company?.currency}</p>
                   </div>
-                  <div className="w-px h-10 bg-slate-200 hidden md:block" />
                   <div className="text-right">
-                    <p className="text-[9px] uppercase font-black tracking-widest text-slate-400 mb-1">Total Crédit</p>
-                    <p className="text-lg font-mono font-black text-slate-900">{totalCredit.toLocaleString()} <span className="text-[10px] text-slate-400">{company?.currency}</span></p>
+                    <p className="text-[9px] uppercase font-black tracking-[0.15em] text-slate-400 mb-1">Total Crédit</p>
+                    <p className="text-xl font-mono font-black text-slate-900">{totalCredit.toLocaleString()} {company?.currency}</p>
                   </div>
                 </div>
               </div>
@@ -421,7 +437,55 @@ export default function Entries() {
         </div>
 
         <div className="space-y-6">
-          <Card className="border-slate-200 shadow-sm overflow-hidden">
+          <Card className={cn(
+            "border-none shadow-xl transition-all duration-300 overflow-hidden",
+            isBalanced ? "bg-emerald-950 text-emerald-50" : "bg-rose-950 text-rose-50"
+          )}>
+            <div className="h-1 bg-white/10" />
+            <CardHeader className="pb-3 border-b border-white/10">
+              <CardTitle className="text-xs font-black uppercase tracking-widest opacity-60">Audit Équilibre</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-6">
+              <div className="space-y-2">
+                <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest opacity-60">
+                  <span>Déséquilibre Actuel</span>
+                  {isBalanced && <CheckCircle2 size={12} className="text-emerald-400" />}
+                </div>
+                <div className={cn(
+                  "text-3xl font-mono font-black tracking-tight",
+                  isBalanced ? "text-emerald-400" : "text-rose-400"
+                )}>
+                  {Math.abs(totalDebit - totalCredit).toLocaleString()} {company?.currency}
+                </div>
+              </div>
+
+              <div className="p-4 bg-white/5 rounded-2xl space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-[9px] font-black uppercase tracking-widest opacity-50">Journal Actif</span>
+                  <span className="text-[9px] font-bold px-2 py-0.5 bg-white/10 rounded-full">{journals.find(j => j.id === journalId)?.code || "N/A"}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-[9px] font-black uppercase tracking-widest opacity-50">Nombre de Lignes</span>
+                  <span className="text-[9px] font-bold">{lines.length}</span>
+                </div>
+              </div>
+
+              <Button 
+                className={cn(
+                  "w-full h-12 gap-2 text-xs font-black uppercase tracking-widest transition-all",
+                  isBalanced 
+                    ? "bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/20" 
+                    : "bg-white/10 text-white/40 cursor-not-allowed"
+                )}
+                onClick={handleSave} 
+                disabled={loading || !isBalanced || totalDebit === 0}
+              >
+                {loading ? <RefreshCw className="animate-spin" size={16} /> : <Save size={16} />}
+                Valider l'Écriture
+              </Button>
+            </CardContent>
+          </Card>
+          <Card className="border-none shadow-xl bg-white overflow-hidden">
             <CardHeader className="py-4 border-b bg-slate-50/50">
               <CardTitle className="text-xs font-black uppercase tracking-widest text-slate-700 flex items-center gap-2">
                 <History size={14} className="text-indigo-500" />
@@ -429,8 +493,8 @@ export default function Entries() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto custom-scrollbar">
-                {filteredTransactions.map((tx) => (
+              <div className="divide-y divide-slate-100 max-h-[400px] overflow-y-auto custom-scrollbar">
+                {filteredTransactions.slice(0, 10).map((tx) => (
                   <div key={tx.id} className="p-4 hover:bg-slate-50 transition-colors cursor-pointer group relative">
                     <div className="flex justify-between items-start mb-2">
                       <Badge variant="outline" className="text-[9px] h-4 px-1.5 font-mono font-bold border-slate-200 bg-white text-slate-600">{tx.reference}</Badge>
@@ -444,9 +508,7 @@ export default function Entries() {
                         </div>
                         <span className="text-[10px] font-mono font-black text-slate-900">{(tx.totalAmount || 0).toLocaleString()} {company?.currency}</span>
                       </div>
-                      <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-                        <ChevronRight size={14} className="text-indigo-500" />
-                      </Button>
+                      <ChevronRight size={14} className="text-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
                   </div>
                 ))}
@@ -462,31 +524,19 @@ export default function Entries() {
             </CardContent>
           </Card>
 
-          <Card className="border-indigo-100 bg-indigo-50/30 overflow-hidden">
-            <CardHeader className="py-4 border-b border-indigo-100 bg-indigo-50/50">
-              <CardTitle className="text-[10px] font-black uppercase tracking-widest text-indigo-700 flex items-center gap-2">
-                <Calculator size={14} /> Outils d'Assistance
-              </CardTitle>
-            </CardHeader>
+          <Card className="border-indigo-100 bg-indigo-50/10 overflow-hidden">
             <CardContent className="p-5 space-y-4">
-              <div className="p-3 bg-white rounded-xl border border-indigo-100 shadow-sm">
-                <p className="text-[10px] text-indigo-900 font-bold leading-relaxed mb-3">
-                  Automatisez vos saisies récurrentes en créant des modèles personnalisés.
-                </p>
-                <div className="grid grid-cols-1 gap-2">
-                  <Button variant="outline" size="sm" className="h-8 text-[9px] font-black uppercase tracking-widest border-indigo-100 hover:bg-indigo-50 hover:text-indigo-700" onClick={() => toast.info("Calculatrice intégrée bientôt disponible")}>
-                    <Calculator size={12} className="mr-2" /> Calculatrice
-                  </Button>
-                  <Button variant="outline" size="sm" className="h-8 text-[9px] font-black uppercase tracking-widest border-indigo-100 hover:bg-indigo-50 hover:text-indigo-700" onClick={() => toast.info("Importation de masse bientôt disponible")}>
-                    <ArrowDownLeft size={12} className="mr-2" /> Import CSV/Excel
-                  </Button>
-                </div>
+              <div className="flex items-center gap-2">
+                <Calculator size={14} className="text-indigo-500" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-700">Assistance</span>
               </div>
-              
-              <div className="flex items-center gap-2 p-2 bg-white/50 rounded-lg border border-indigo-50">
+              <p className="text-[10px] text-indigo-900 font-medium leading-relaxed">
+                Utilisez les modèles pour automatiser vos saisies récurrentes.
+              </p>
+              <div className="flex items-center gap-2 p-2 bg-white rounded-lg border border-indigo-50">
                 <Info size={14} className="text-indigo-400 shrink-0" />
                 <p className="text-[9px] text-indigo-600 font-medium">
-                  Appuyez sur <kbd className="px-1 py-0.5 rounded bg-slate-100 border text-[8px]">Tab</kbd> pour naviguer rapidement entre les champs.
+                  Raccourci: <kbd className="px-1 py-0.5 rounded bg-slate-100 border text-[8px]">Tab</kbd> pour naviguer entre les champs.
                 </p>
               </div>
             </CardContent>

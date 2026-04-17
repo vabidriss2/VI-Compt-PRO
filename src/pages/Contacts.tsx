@@ -178,11 +178,9 @@ export default function Contacts() {
             <Filter size={18} /> Filtres Avancés
           </Button>
           <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-            <DialogTrigger render={
-              <Button className="gap-2">
-                <Plus size={18} /> Nouveau Contact
-              </Button>
-            } />
+            <DialogTrigger className="gap-2">
+              <Plus size={18} /> Nouveau Contact
+            </DialogTrigger>
             <DialogContent className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle>Ajouter un nouveau tiers</DialogTitle>

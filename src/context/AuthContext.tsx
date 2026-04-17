@@ -29,33 +29,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isAuthReady, setIsAuthReady] = useState(false);
 
   useEffect(() => {
+    let unsubscribeUser: () => void = () => {};
+    let unsubscribeCompany: () => void = () => {};
+
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       setUser(user);
       if (user) {
-        // Fetch user data
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists()) {
-          const data = userDoc.data();
-          const fullUserData = { ...data, uid: user.uid };
-          setUserData(fullUserData);
-          
-          // Fetch company data
-          if (data.companyId) {
-            const companyDoc = await getDoc(doc(db, 'companies', data.companyId));
-            if (companyDoc.exists()) {
-              setCompany(companyDoc.data());
+        // Fetch user data with real-time updates
+        unsubscribeUser = onSnapshot(doc(db, 'users', user.uid), async (userDoc) => {
+          if (userDoc.exists()) {
+            const data = userDoc.data();
+            const fullUserData = { ...data, uid: user.uid };
+            setUserData(fullUserData);
+            
+            // Fetch company data
+            if (data.companyId) {
+              unsubscribeCompany = onSnapshot(doc(db, 'companies', data.companyId), (companyDoc) => {
+                if (companyDoc.exists()) {
+                  setCompany(companyDoc.data());
+                }
+              });
             }
           }
-        }
+          setLoading(false);
+          setIsAuthReady(true);
+        }, (error) => {
+          console.error("Error fetching user data:", error);
+          setLoading(false);
+          setIsAuthReady(true);
+        });
       } else {
         setUserData(null);
         setCompany(null);
+        setLoading(false);
+        setIsAuthReady(true);
       }
-      setLoading(false);
-      setIsAuthReady(true);
     });
 
-    return () => unsubscribeAuth();
+    return () => {
+      unsubscribeAuth();
+      unsubscribeUser();
+      unsubscribeCompany();
+    };
   }, []);
 
   return (

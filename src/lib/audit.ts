@@ -4,7 +4,7 @@ import { db } from './firebase';
 export async function logAction(
   companyId: string, 
   userId: string, 
-  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'LOGOUT' | 'EXECUTE', 
+  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'LOGOUT' | 'EXECUTE' | 'INVITE' | 'REVOKE' | 'IMPORT' | 'UPDATE_PERMISSIONS', 
   collectionName: string,
   documentId: string | null,
   details: any

@@ -8,13 +8,26 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { format, parseISO, differenceInDays } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { Send, History, AlertTriangle, MessageSquare, Clock, Search, Filter, CheckCircle2, Mail, Bell, ShieldAlert } from 'lucide-react';
+import { Send, History, AlertTriangle, MessageSquare, Clock, Search, Filter, CheckCircle2, Mail, Bell, ShieldAlert, Settings as SettingsIcon, Plus, Trash2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { sendEmailSimulation } from '../services/emailService';
 import { handleFirestoreError, OperationType } from '../lib/error-handler';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogFooter, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger 
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 
 export default function Reminders() {
   const { userData, company } = useAuth();
@@ -23,6 +36,51 @@ export default function Reminders() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedInvoices, setSelectedInvoices] = useState<string[]>([]);
   const [isSendingBulk, setIsSendingBulk] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isAutoEnabled, setIsAutoEnabled] = useState(company?.reminderSettings?.enabled || false);
+  const [rules, setRules] = useState<any[]>(company?.reminderSettings?.rules || []);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (company?.reminderSettings) {
+      setIsAutoEnabled(company.reminderSettings.enabled || false);
+      setRules(company.reminderSettings.rules || []);
+    }
+  }, [company]);
+
+  const handleSaveSettings = async () => {
+    if (!userData?.companyId) return;
+    setLoading(true);
+    try {
+      const companyRef = doc(db, 'companies', userData.companyId);
+      await updateDoc(companyRef, {
+        reminderSettings: {
+          enabled: isAutoEnabled,
+          rules: rules
+        }
+      });
+      toast.success("Paramètres d'automatisme mis à jour !");
+      setIsSettingsOpen(false);
+    } catch (error) {
+      toast.error("Erreur lors de la sauvegarde des paramètres.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addRule = () => {
+    setRules([...rules, { days: 7, type: 'after', message: "Bonjour [nom_client], la facture [num_facture] est en retard de [jours] jours. Merci de régulariser." }]);
+  };
+
+  const removeRule = (index: number) => {
+    setRules(rules.filter((_, i) => i !== index));
+  };
+
+  const updateRule = (index: number, field: string, value: any) => {
+    const newRules = [...rules];
+    newRules[index][field] = value;
+    setRules(newRules);
+  };
 
   useEffect(() => {
     if (!userData?.companyId) return;
@@ -54,13 +112,22 @@ export default function Reminders() {
     };
   }, [userData]);
 
-  const handleSendReminder = async (invoice: any) => {
+  const handleSendReminder = async (invoice: any, customMessage?: string) => {
     try {
       const contact = contacts.find(c => c.id === invoice.contactId);
       const daysLate = differenceInDays(new Date(), parseISO(invoice.dueDate));
       
       const title = `Relance : Facture ${invoice.number} en retard`;
-      const message = `Bonjour ${contact?.name || 'Client'},\n\nSauf erreur de notre part, la facture ${invoice.number} d'un montant de ${invoice.totalAmount.toLocaleString()} ${company?.currency} est en retard de ${daysLate} jours.\n\nMerci de procéder au règlement dans les plus brefs délais.`;
+      let message = customMessage || `Bonjour ${contact?.name || 'Client'},\n\nSauf erreur de notre part, la facture ${invoice.number} d'un montant de ${invoice.totalAmount.toLocaleString()} ${company?.currency} est en retard de ${daysLate} jours.\n\nMerci de procéder au règlement dans les plus brefs délais.`;
+
+      // Replace variables if customMessage
+      if (customMessage) {
+        message = message
+          .replace('[nom_client]', contact?.name || 'Client')
+          .replace('[num_facture]', invoice.number)
+          .replace('[montant]', invoice.totalAmount.toLocaleString() + ' ' + (company?.currency || ''))
+          .replace('[jours]', daysLate.toString());
+      }
 
       await addDoc(collection(db, `companies/${userData!.companyId}/notifications`), {
         type: 'payment_reminder',
@@ -87,10 +154,36 @@ export default function Reminders() {
         lastReminderDate: new Date().toISOString()
       });
 
-      toast.success(`Relance envoyée à ${contact?.name || 'Client'}`);
+      if (!customMessage) toast.success(`Relance envoyée à ${contact?.name || 'Client'}`);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `companies/${userData!.companyId}/notifications`);
-      toast.error("Erreur lors de l'envoi de la relance");
+      if (!customMessage) toast.error("Erreur lors de l'envoi de la relance");
+    }
+  };
+
+  const runAutomationSimulation = async () => {
+    if (!isAutoEnabled || rules.length === 0) {
+      toast.info("L'automatisation est désactivée ou aucune règle n'est définie.");
+      return;
+    }
+    setLoading(true);
+    try {
+      let sentCount = 0;
+      for (const inv of overdueInvoices) {
+        const daysLate = differenceInDays(new Date(), parseISO(inv.dueDate));
+        // Find if any rule matches the current delay
+        const matchingRule = rules.find(r => r.type === 'after' && r.days === daysLate);
+        
+        if (matchingRule) {
+          await handleSendReminder(inv, matchingRule.message);
+          sentCount++;
+        }
+      }
+      toast.success(`${sentCount} rappels automatiques envoyés selon vos règles.`);
+    } catch (e) {
+      toast.error("Erreur lors du traitement automatique");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -138,6 +231,107 @@ export default function Reminders() {
           <p className="text-muted-foreground">Gérez vos factures impayées et automatisez le suivi des règlements.</p>
         </div>
         <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            className="gap-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+            disabled={!isAutoEnabled || loading}
+            onClick={runAutomationSimulation}
+          >
+            <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+            Exécuter l'Automatisme
+          </Button>
+          <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+            <DialogTrigger variant="outline" className="gap-2 border-slate-200">
+              <SettingsIcon size={16} />
+              Configurer l'Automatisme
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Bell className="text-primary" size={20} />
+                  Configuration des Rappels Automatiques
+                </DialogTitle>
+                <DialogDescription>
+                  Définissez les règles pour l'envoi automatique des relances clients.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-6 py-4">
+                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
+                  <div className="space-y-1">
+                    <Label className="text-base">Activer l'automatisation</Label>
+                    <p className="text-xs text-muted-foreground">Les relances seront envoyées selon les règles ci-dessous.</p>
+                  </div>
+                  <Switch checked={isAutoEnabled} onCheckedChange={setIsAutoEnabled} />
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold uppercase tracking-widest text-slate-500">Règles de relance</h3>
+                    <Button variant="ghost" size="sm" onClick={addRule} className="text-primary hover:text-primary/80 h-8 gap-1">
+                      <Plus size={14} /> Ajouter une règle
+                    </Button>
+                  </div>
+
+                  {rules.length === 0 && (
+                    <div className="text-center py-8 border-2 border-dashed border-slate-100 rounded-2xl">
+                      <p className="text-sm text-slate-400">Aucune règle définie.</p>
+                    </div>
+                  )}
+
+                  <div className="space-y-3">
+                    {rules.map((rule, index) => (
+                      <Card key={index} className="border-slate-200 shadow-none overflow-hidden hover:border-primary/30 transition-colors">
+                        <div className="p-4 space-y-4">
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs font-black text-white bg-slate-400 w-6 h-6 rounded-full flex items-center justify-center">{index + 1}</span>
+                            <div className="flex items-center gap-2 flex-1">
+                              <Input 
+                                type="number" 
+                                className="w-16 h-8 text-center" 
+                                value={rule.days} 
+                                onChange={(e) => updateRule(index, 'days', Number(e.target.value))} 
+                              />
+                              <Select value={rule.type} onValueChange={(v) => updateRule(index, 'type', v)}>
+                                <SelectTrigger className="h-8 w-44">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="after">jours après l'échéance</SelectItem>
+                                  <SelectItem value="before">jours avant l'échéance</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-500 hover:text-rose-600 hover:bg-rose-50" onClick={() => removeRule(index)}>
+                              <Trash2 size={14} />
+                            </Button>
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Message personnalisé</Label>
+                            <Textarea 
+                              className="text-xs min-h-[80px] bg-slate-50/50" 
+                              value={rule.message} 
+                              onChange={(e) => updateRule(index, 'message', e.target.value)}
+                              placeholder="Message de la relance..."
+                            />
+                            <p className="text-[9px] text-slate-400">Variables : [nom_client], [num_facture], [montant], [jours]</p>
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsSettingsOpen(false)}>Annuler</Button>
+                <Button onClick={handleSaveSettings} disabled={loading} className="gap-2">
+                  {loading && <RefreshCw size={14} className="animate-spin" />}
+                  Sauvegarder les règles
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
           <Button 
             variant="default" 
             className="gap-2" 
